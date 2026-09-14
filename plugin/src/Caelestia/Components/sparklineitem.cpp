@@ -1,5 +1,6 @@
 #include "sparklineitem.hpp"
 
+#include <algorithm>
 #include <qpainter.h>
 #include <qpainterpath.h>
 #include <qpen.h>
@@ -27,7 +28,7 @@ void SparklineItem::paint(QPainter* painter) {
 }
 
 void SparklineItem::drawLine(QPainter* painter, CircularBuffer* buffer, const QColor& color, qreal fillAlpha) {
-    if (m_historyLength < 2)
+    if (m_historyLength < 2 || m_maxValue <= 0.0)
         return;
 
     const qreal w = width();
@@ -37,11 +38,15 @@ void SparklineItem::drawLine(QPainter* painter, CircularBuffer* buffer, const QC
     const qreal startX = w - (len - 1) * stepX - stepX * m_slideProgress + stepX;
 
     // Build line path
+    const auto calcY = [h, this](qreal val) -> qreal {
+        return std::clamp(h - (val / m_maxValue) * h, 0.0, h);
+    };
+
     QPainterPath linePath;
-    linePath.moveTo(startX, h - (buffer->at(0) / m_maxValue) * h);
+    linePath.moveTo(startX, calcY(buffer->at(0)));
     for (int i = 1; i < len; ++i) {
         const qreal x = startX + i * stepX;
-        const qreal y = h - (buffer->at(i) / m_maxValue) * h;
+        const qreal y = calcY(buffer->at(i));
         linePath.lineTo(x, y);
     }
 
