@@ -5,6 +5,7 @@ import Caelestia
 import qs.components.misc
 import qs.services
 import qs.modules.nexus
+import qs.modules.clipboard
 
 Scope {
     id: root
@@ -19,6 +20,14 @@ Scope {
         description: "Open nexus"
         onPressed: WindowFactory.create()
     }
+    // qmllint disable unresolved-type
+    CustomShortcut {
+        // qmllint enable unresolved-type
+        name: "clipboard"
+        description: "Toggle clipboard"
+        onPressed: ClipboardWindow.toggle()
+    }
+
 
     // qmllint disable unresolved-type
     CustomShortcut {
@@ -142,6 +151,22 @@ Scope {
 
         target: "nexus"
     }
+    IpcHandler {
+        function open(): void {
+            ClipboardWindow.open();
+        }
+
+        function close(): void {
+            ClipboardWindow.close();
+        }
+
+        function toggle(): void {
+            ClipboardWindow.toggle();
+        }
+
+        target: "clipboard"
+    }
+
 
     IpcHandler {
         function info(title: string, message: string, icon: string): void {
