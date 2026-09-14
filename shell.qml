@@ -3,6 +3,7 @@
 //@ pragma DefaultEnv QS_DROP_EXPENSIVE_FONTS=1
 //@ pragma DefaultEnv QSG_RENDER_LOOP=threaded
 //@ pragma DefaultEnv QT_QUICK_FLICKABLE_WHEEL_DECELERATION=10000
+//@ pragma Env QML2_IMPORT_PATH=/home/tmih/.config/quickshell/caelestia/build/qml
 
 import "modules"
 import "modules/drawers"
