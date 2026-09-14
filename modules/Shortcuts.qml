@@ -27,8 +27,6 @@ Scope {
         description: "Toggle clipboard"
         onPressed: ClipboardWindow.toggle()
     }
-
-
     // qmllint disable unresolved-type
     CustomShortcut {
         // qmllint enable unresolved-type
@@ -166,8 +164,6 @@ Scope {
 
         target: "clipboard"
     }
-
-
     IpcHandler {
         function info(title: string, message: string, icon: string): void {
             Toaster.toast(title, message, icon, Toast.Info);

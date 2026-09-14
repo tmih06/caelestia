@@ -14,8 +14,7 @@ import qs.services
 Item {
     id: root
 
-    readonly property string helperPath: Quickshell.env("HOME") + "/.config/quickshell/caelestia/modules/clipboard/clipboard-helper.py"
-    readonly property string cacheDir: Quickshell.env("HOME") + "/.cache/caelestia/cliphist/"
+    readonly property string helperPath: Quickshell.shellPath("modules/clipboard/clipboard-helper.py")
 
     signal closeRequested
 
@@ -58,11 +57,22 @@ Item {
         id: decodeProc
 
         property string pendingId: ""
+        property string runningId: ""
 
         command: ["python3", root.helperPath, "decode", pendingId]
 
+        onRunningChanged: {
+            if (running)
+                runningId = pendingId;
+        }
+
         stdout: StdioCollector {
             onStreamFinished: {
+                if (decodeProc.runningId !== decodeProc.pendingId) {
+                    // Selection changed while decoding; discard stale result and restart
+                    decodeProc.running = true;
+                    return;
+                }
                 const path = text.trim();
                 if (path.length > 0) {
                     root.currentImageSource = "file://" + path;
@@ -76,11 +86,22 @@ Item {
         id: textProc
 
         property string pendingId: ""
+        property string runningId: ""
 
         command: ["python3", root.helperPath, "get-text", pendingId]
 
+        onRunningChanged: {
+            if (running)
+                runningId = pendingId;
+        }
+
         stdout: StdioCollector {
             onStreamFinished: {
+                if (textProc.runningId !== textProc.pendingId) {
+                    // Selection changed while fetching; discard stale result and restart
+                    textProc.running = true;
+                    return;
+                }
                 root.currentTextContent = text;
             }
         }
@@ -122,15 +143,15 @@ Item {
 
         if (item.isImage) {
             root.currentTextContent = "";
-            const expectedPath = root.cacheDir + item.id + ".png";
-            // Check if already decoded
             decodeProc.pendingId = item.id;
-            decodeProc.running = true;
+            if (!decodeProc.running)
+                decodeProc.running = true;
         } else {
             root.currentImageSource = "";
             root.currentTextContent = item.preview || "";
             textProc.pendingId = item.id;
-            textProc.running = true;
+            if (!textProc.running)
+                textProc.running = true;
         }
     }
 
@@ -153,9 +174,12 @@ Item {
         root.applyFilter(searchBar.text);
     }
 
-    Keys.onEscapePressed: event => {
-        root.closeRequested();
-        event.accepted = true;
+    function moveSelection(delta: int): void {
+        if (filteredModel.count === 0)
+            return;
+        root.selectedIndex = Math.max(0, Math.min(root.selectedIndex + delta, filteredModel.count - 1));
+        listView.positionViewAtIndex(root.selectedIndex, ListView.Contain);
+        root.updatePreview();
     }
 
     Component.onCompleted: {
@@ -195,20 +219,12 @@ Item {
                 onTextChanged: root.applyFilter(text)
 
                 Keys.onDownPressed: event => {
-                    if (filteredModel.count > 0 && root.selectedIndex < filteredModel.count - 1) {
-                        root.selectedIndex++;
-                        listView.positionViewAtIndex(root.selectedIndex, ListView.Contain);
-                        root.updatePreview();
-                    }
+                    root.moveSelection(1);
                     event.accepted = true;
                 }
 
                 Keys.onUpPressed: event => {
-                    if (filteredModel.count > 0 && root.selectedIndex > 0) {
-                        root.selectedIndex--;
-                        listView.positionViewAtIndex(root.selectedIndex, ListView.Contain);
-                        root.updatePreview();
-                    }
+                    root.moveSelection(-1);
                     event.accepted = true;
                 }
 
@@ -228,18 +244,10 @@ Item {
                 }
                 Keys.onPressed: event => {
                     if (event.key === Qt.Key_PageDown) {
-                        if (filteredModel.count > 0) {
-                            root.selectedIndex = Math.min(root.selectedIndex + 8, filteredModel.count - 1);
-                            listView.positionViewAtIndex(root.selectedIndex, ListView.Contain);
-                            root.updatePreview();
-                        }
+                        root.moveSelection(8);
                         event.accepted = true;
                     } else if (event.key === Qt.Key_PageUp) {
-                        if (filteredModel.count > 0) {
-                            root.selectedIndex = Math.max(root.selectedIndex - 8, 0);
-                            listView.positionViewAtIndex(root.selectedIndex, ListView.Contain);
-                            root.updatePreview();
-                        }
+                        root.moveSelection(-8);
                         event.accepted = true;
                     }
                 }

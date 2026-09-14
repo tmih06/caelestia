@@ -7,11 +7,11 @@ import sys
 from io import BytesIO
 from pathlib import Path
 
-CACHE_DIR = Path.home() / ".cache" / "caelestia" / "cliphist"
+CACHE_DIR = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "caelestia" / "cliphist"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 IMG_RE = re.compile(
-    r"^(\d+)\s+\[\[\s*binary data\s+([0-9.]+)\s*(KiB|MiB)\s+(png|jpg|jpeg|webp)\s*([0-9x]+)?\s*\]\]"
+    r"^(\d+)\s+\[\[\s*binary data\s+([0-9.]+)\s*(B|KiB|MiB|GiB)\s+(\w+)\s*([0-9x]+)?\s*\]\]"
 )
 
 
