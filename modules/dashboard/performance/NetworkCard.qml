@@ -49,11 +49,13 @@ StyledRect {
             Layout.bottomMargin: Tokens.spacing.small
             Layout.fillWidth: true
             Layout.fillHeight: true
+            clip: true
 
             SparklineItem {
                 id: sparkline
 
-                property real targetMax: 1024
+                // Bound so the scale tracks peaks even when buffers already hold data
+                property real targetMax: Math.max(NetworkUsage.downloadBuffer.maximum, NetworkUsage.uploadBuffer.maximum, 1024) // qmllint disable missing-type
                 property real smoothMax: targetMax
 
                 anchors.fill: parent
@@ -68,7 +70,6 @@ StyledRect {
 
                 Connections {
                     function onValuesChanged(): void {
-                        sparkline.targetMax = Math.max(NetworkUsage.downloadBuffer.maximum, NetworkUsage.uploadBuffer.maximum, 1024);
                         slideAnim.restart();
                     }
 
@@ -82,12 +83,15 @@ StyledRect {
                     property: "slideProgress"
                     from: 0
                     to: 1
+                    running: true
                     easing.type: Easing.Linear
                     duration: GlobalConfig.dashboard.resourceUpdateInterval
                 }
 
                 Behavior on smoothMax {
-                    Anim {}
+                    Anim {
+                        type: Anim.Standard
+                    }
                 }
             }
 
