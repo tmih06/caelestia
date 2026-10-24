@@ -3,7 +3,6 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Hyprland
-import Caelestia.Config
 import qs.components
 import qs.services
 import qs.modules.clipboard
@@ -66,6 +65,7 @@ Singleton {
 
             HyprlandFocusGrab {
                 id: grab
+
                 active: false
                 windows: [win]
                 onCleared: root.close()
@@ -73,16 +73,17 @@ Singleton {
 
             Timer {
                 id: grabTimer
+
                 interval: 200
                 running: true
                 onTriggered: grab.active = true
             }
             Connections {
-                target: Hypr
-
                 function onActiveWsIdChanged(): void {
                     root.close();
                 }
+
+                target: Hypr
             }
 
             Behavior on color {

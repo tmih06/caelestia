@@ -16,16 +16,96 @@ Item {
 
     readonly property string helperPath: Quickshell.shellPath("modules/clipboard/clipboard-helper.py")
 
-    signal closeRequested
-
-    implicitWidth: 940
-    implicitHeight: 580
-
     property var allItems: []
     property int selectedIndex: 0
     property var currentItem: filteredModel.count > selectedIndex && selectedIndex >= 0 ? filteredModel.get(selectedIndex) : null
     property string currentImageSource: ""
     property string currentTextContent: ""
+
+    signal closeRequested
+
+    function refresh(): void {
+        listProc.running = true;
+    }
+
+    function applyFilter(query: string): void {
+        filteredModel.clear();
+        const q = (query || "").toLowerCase();
+
+        for (let i = 0; i < root.allItems.length; i++) {
+            const item = root.allItems[i];
+            const target = (item.preview || "").toLowerCase();
+            if (q.length === 0 || target.includes(q)) {
+                filteredModel.append(item);
+            }
+        }
+
+        if (filteredModel.count > 0) {
+            root.selectedIndex = 0;
+            root.updatePreview();
+        } else {
+            root.selectedIndex = -1;
+            root.currentImageSource = "";
+            root.currentTextContent = "";
+        }
+    }
+
+    function updatePreview(): void {
+        const item = root.currentItem;
+        if (!item) {
+            root.currentImageSource = "";
+            root.currentTextContent = "";
+            return;
+        }
+
+        if (item.isImage) {
+            root.currentTextContent = "";
+            decodeProc.pendingId = item.id;
+            if (!decodeProc.running)
+                decodeProc.running = true;
+        } else {
+            root.currentImageSource = "";
+            root.currentTextContent = item.preview || "";
+            textProc.pendingId = item.id;
+            if (!textProc.running)
+                textProc.running = true;
+        }
+    }
+
+    function copyCurrent(): void {
+        const item = root.currentItem;
+        if (!item)
+            return;
+        Quickshell.execDetached(["python3", root.helperPath, "copy", item.id]);
+        root.closeRequested();
+    }
+
+    function deleteCurrent(): void {
+        const item = root.currentItem;
+        if (!item)
+            return;
+        Quickshell.execDetached(["python3", root.helperPath, "delete", item.id]);
+
+        // Remove from local allItems
+        root.allItems = root.allItems.filter(x => x.id !== item.id);
+        root.applyFilter(searchBar.text);
+    }
+
+    function moveSelection(delta: int): void {
+        if (filteredModel.count === 0)
+            return;
+        root.selectedIndex = Math.max(0, Math.min(root.selectedIndex + delta, filteredModel.count - 1));
+        listView.positionViewAtIndex(root.selectedIndex, ListView.Contain);
+        root.updatePreview();
+    }
+
+    implicitWidth: 940
+    implicitHeight: 580
+
+    Component.onCompleted: {
+        root.refresh();
+        Qt.callLater(() => searchBar.forceActiveFocus());
+    }
 
     ListModel {
         id: filteredModel
@@ -105,86 +185,6 @@ Item {
                 root.currentTextContent = text;
             }
         }
-    }
-
-    function refresh(): void {
-        listProc.running = true;
-    }
-
-    function applyFilter(query: string): void {
-        filteredModel.clear();
-        const q = (query || "").toLowerCase();
-
-        for (let i = 0; i < root.allItems.length; i++) {
-            const item = root.allItems[i];
-            const target = (item.preview || "").toLowerCase();
-            if (q.length === 0 || target.includes(q)) {
-                filteredModel.append(item);
-            }
-        }
-
-        if (filteredModel.count > 0) {
-            root.selectedIndex = 0;
-            root.updatePreview();
-        } else {
-            root.selectedIndex = -1;
-            root.currentImageSource = "";
-            root.currentTextContent = "";
-        }
-    }
-
-    function updatePreview(): void {
-        const item = root.currentItem;
-        if (!item) {
-            root.currentImageSource = "";
-            root.currentTextContent = "";
-            return;
-        }
-
-        if (item.isImage) {
-            root.currentTextContent = "";
-            decodeProc.pendingId = item.id;
-            if (!decodeProc.running)
-                decodeProc.running = true;
-        } else {
-            root.currentImageSource = "";
-            root.currentTextContent = item.preview || "";
-            textProc.pendingId = item.id;
-            if (!textProc.running)
-                textProc.running = true;
-        }
-    }
-
-    function copyCurrent(): void {
-        const item = root.currentItem;
-        if (!item)
-            return;
-        Quickshell.execDetached(["python3", root.helperPath, "copy", item.id]);
-        root.closeRequested();
-    }
-
-    function deleteCurrent(): void {
-        const item = root.currentItem;
-        if (!item)
-            return;
-        Quickshell.execDetached(["python3", root.helperPath, "delete", item.id]);
-
-        // Remove from local allItems
-        root.allItems = root.allItems.filter(x => x.id !== item.id);
-        root.applyFilter(searchBar.text);
-    }
-
-    function moveSelection(delta: int): void {
-        if (filteredModel.count === 0)
-            return;
-        root.selectedIndex = Math.max(0, Math.min(root.selectedIndex + delta, filteredModel.count - 1));
-        listView.positionViewAtIndex(root.selectedIndex, ListView.Contain);
-        root.updatePreview();
-    }
-
-    Component.onCompleted: {
-        root.refresh();
-        Qt.callLater(() => searchBar.forceActiveFocus());
     }
 
     // Outer Background
@@ -412,7 +412,8 @@ Item {
                             Layout.fillWidth: true
                             text: {
                                 const it = root.currentItem;
-                                if (!it) return Tr.tr("No selection");
+                                if (!it)
+                                    return Tr.tr("No selection");
                                 if (it.isImage) {
                                     return Tr.tr("%1 Image • %2 • %3").arg(it.format).arg(it.dim || Tr.tr("Unknown size")).arg(it.size);
                                 }
@@ -479,6 +480,7 @@ Item {
 
                         // Fade in on image load
                         opacity: status === Image.Ready ? 1 : 0
+
                         Behavior on opacity {
                             Anim {
                                 type: Anim.DefaultEffects

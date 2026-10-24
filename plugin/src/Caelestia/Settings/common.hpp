@@ -1,11 +1,12 @@
 #pragma once
 
 #include <qjsonvalue.h>
+#include <qlist.h>
 #include <qloggingcategory.h>
 #include <qobject.h>
 #include <qqmlintegration.h>
 
-namespace caelestia::settings {
+namespace caelestia::shell::settings {
 
 Q_DECLARE_LOGGING_CATEGORY(lcSettings)
 
@@ -32,9 +33,21 @@ private:
     Q_DISABLE_COPY_MOVE(WriteScope)
 };
 
+class InternalRead {
+public:
+    explicit InternalRead(Node* node);
+    ~InternalRead();
+
+private:
+    Node* const m_root;
+    const bool m_previous;
+
+    Q_DISABLE_COPY_MOVE(InternalRead)
+};
+
 class DiagnosticType : public QObject {
     Q_OBJECT
-    QML_ELEMENT
+    QML_NAMED_ELEMENT(DiagnosticType)
     QML_SINGLETON
 
 public:
@@ -46,7 +59,7 @@ public:
     };
     Q_ENUM(Type)
 
-    Q_INVOKABLE static QString toString(Type t);
+    Q_INVOKABLE static QString toString(caelestia::shell::settings::DiagnosticType::Type t);
 };
 
 enum class ExpectedType : quint8 {
@@ -71,9 +84,11 @@ public:
     QString option;
     QString message;
 
-    static Diagnostic mismatch(ExpectedType expected, const QJsonValue& value, const QString& option = QString());
+    static Diagnostic mismatch(ExpectedType expected, const QJsonValue& value, const QString& option = {});
+    static Diagnostic mismatch(
+        const QList<ExpectedType>& expected, const QJsonValue& value, const QString& option = {});
 
     bool operator==(const Diagnostic& other) const = default;
 };
 
-} // namespace caelestia::settings
+} // namespace caelestia::shell::settings

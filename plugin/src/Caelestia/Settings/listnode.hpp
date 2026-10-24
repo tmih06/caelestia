@@ -2,7 +2,7 @@
 
 #include "node.hpp"
 
-namespace caelestia::settings {
+namespace caelestia::shell::settings {
 
 class ListNode : public Node {
     Q_OBJECT
@@ -36,7 +36,9 @@ public:
 
 signals:
     void countChanged();
-    void elementsChanged(const NodeChanges& added, const NodeChanges& removed, const MoveChanges& moved);
+    void elementsChanged(const caelestia::shell::settings::ListNode::NodeChanges& added,
+        const caelestia::shell::settings::ListNode::NodeChanges& removed,
+        const caelestia::shell::settings::ListNode::MoveChanges& moved);
 
 protected:
     bool recordWrite(const QString& key, bool changed) override;
@@ -52,8 +54,8 @@ private:
     [[nodiscard]] QList<QVariantMap> defaultValue() const;
     [[nodiscard]] bool isNested() const;
 
-    // Returns the global list to mutate instead of this one, or nullptr to mutate this one
-    [[nodiscard]] ListNode* forwardGlobalMutation() const;
+    // Returns true if the mutation should be skipped, overlays cannot mutate global lists
+    [[nodiscard]] bool rejectGlobalMutation() const;
 
     [[nodiscard]] bool validIndex(qsizetype index) const;
     [[nodiscard]] const Descriptor* getDescriptor() const;
@@ -66,4 +68,4 @@ private:
     void onFallbackListNotify(const NodeChanges& added, const NodeChanges& removed, const MoveChanges& moved);
 };
 
-} // namespace caelestia::settings
+} // namespace caelestia::shell::settings
