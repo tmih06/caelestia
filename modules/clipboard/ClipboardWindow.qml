@@ -65,6 +65,7 @@ Singleton {
 
             HyprlandFocusGrab {
                 id: grab
+
                 active: false
                 windows: [win]
                 onCleared: root.close()
@@ -72,16 +73,17 @@ Singleton {
 
             Timer {
                 id: grabTimer
+
                 interval: 200
                 running: true
                 onTriggered: grab.active = true
             }
             Connections {
-                target: Hypr
-
                 function onActiveWsIdChanged(): void {
                     root.close();
                 }
+
+                target: Hypr
             }
 
             Behavior on color {
