@@ -23,16 +23,9 @@ Item {
     readonly property var player: Players.active
     readonly property bool playing: !!player && (player.isPlaying ?? false)
     readonly property string title: visibleText(player?.trackTitle) || visibleText(Players.getIdentity(player)) || Tr.tr("Unknown title")
-    readonly property real position: {
-        const value = player?.position ?? 0;
-        return Number.isFinite(value) && value > 0 ? value : 0;
-    }
-    readonly property real length: {
-        const value = player?.length ?? 0;
-        return Number.isFinite(value) && value > 0 ? value : 0;
-    }
-    readonly property bool hasProgress: !!player && (player?.positionSupported ?? false) && length > 0
-    readonly property real progress: hasProgress ? Math.max(0, Math.min(1, position / length)) : 0
+    readonly property real length: MediaProgress.length
+    readonly property bool hasProgress: MediaProgress.hasProgress
+    readonly property real progress: MediaProgress.progress
     property bool hovered: false
     readonly property bool controlsVisible: !playing || hovered
     readonly property bool marqueeOverflow: titleViewport.width > 0 && titleText.implicitWidth > titleViewport.width + 1
@@ -81,8 +74,8 @@ Item {
             player.pause();
             return;
         }
-        if (length > 0 && position >= length - 0.5 && player.canSeek && player.positionSupported)
-            player.position = 0;
+        if (MediaProgress.length > 0 && MediaProgress.position >= MediaProgress.length - 0.5)
+            MediaProgress.seek(0);
         player.play();
     }
 
@@ -93,15 +86,6 @@ Item {
         } else if (marqueeOverflow) {
             marquee.restart();
         }
-    }
-
-    Timer {
-        interval: GlobalConfig.dashboard.mediaUpdateInterval
-        repeat: true
-        running: root.active && root.playing && (root.player?.positionSupported ?? false)
-        triggeredOnStart: true
-
-        onTriggered: root.player?.positionChanged()
     }
 
     Item {

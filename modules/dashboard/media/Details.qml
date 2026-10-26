@@ -13,14 +13,14 @@ ColumnLayout {
 
     property real dockMorph: 1
 
-    readonly property bool hasUnknownLength: (Players.active?.length ?? 0) > 2147483647
+    readonly property bool hasUnknownLength: !MediaProgress.hasProgress || MediaProgress.length > 2147483647
 
     function playPause(): void {
         const player = Players.active;
         if (!player)
             return;
-        if (!player.isPlaying && player.length > 0 && player.position >= player.length - 0.5 && player.canSeek && player.positionSupported)
-            player.position = 0;
+        if (!player.isPlaying && MediaProgress.length > 0 && MediaProgress.position >= MediaProgress.length - 0.5)
+            MediaProgress.seek(0);
         player.togglePlaying();
     }
 
@@ -38,14 +38,6 @@ ColumnLayout {
     }
 
     spacing: Tokens.spacing.extraSmall
-
-    Timer {
-        running: Players.active?.isPlaying ?? false
-        interval: GlobalConfig.dashboard.mediaUpdateInterval
-        triggeredOnStart: true
-        repeat: true
-        onTriggered: Players.active?.positionChanged()
-    }
 
     StyledText {
         id: titleLabel
@@ -86,7 +78,7 @@ ColumnLayout {
         TextMetrics {
             id: timeMetrics
 
-            text: Players.active ? root.lengthStr(Math.max(Players.active.position, root.hasUnknownLength ? 0 : Players.active.length)).replace(/[1-9]/g, "0") : "00:00"
+            text: MediaProgress.player ? root.lengthStr(Math.max(MediaProgress.position, root.hasUnknownLength ? 0 : MediaProgress.length)).replace(/[1-9]/g, "0") : "00:00"
             font: Tokens.font.label.medium
         }
 
@@ -94,7 +86,7 @@ ColumnLayout {
             id: positionLabel
 
             Layout.preferredWidth: timeMetrics.width
-            text: root.lengthStr(Players.active?.position ?? -1)
+            text: root.lengthStr(MediaProgress.position)
             color: Colours.palette.m3onSurfaceVariant
             font: timeMetrics.font
             horizontalAlignment: Text.AlignHCenter
@@ -107,30 +99,26 @@ ColumnLayout {
 
             opacity: root.dockMorph > 0.85 ? Math.min(1, (root.dockMorph - 0.85) / 0.15) : 0
             Layout.fillWidth: true
-            value: Players.active ? Math.max(0, Math.min(1, Players.active.position / (Players.active.length || 1))) : 0
+            value: MediaProgress.progress
             enabled: (Players.active?.canSeek ?? false) && !root.hasUnknownLength
             wavy: true
-            animateWave: Players.active?.isPlaying ?? false
+            animateWave: MediaProgress.playing
             waveFrequency: 5
             waveDuration: 2000
             interactionOnMove: false
-            onInteraction: value => {
-                const active = Players.active;
-                if (active?.canSeek && active?.positionSupported)
-                    active.position = value * active.length;
-            }
+            onInteraction: value => MediaProgress.seek(value * MediaProgress.length)
 
             Binding {
                 target: positionLabel
                 property: "text"
-                value: root.lengthStr(positionSlider.pos * (Players.active?.length ?? 0))
+                value: root.lengthStr(positionSlider.pos * MediaProgress.length)
                 when: positionSlider.dragging
             }
         }
 
         StyledText {
             Layout.preferredWidth: timeMetrics.width
-            text: root.hasUnknownLength ? "--:--" : root.lengthStr(Players.active?.length ?? -1)
+            text: root.hasUnknownLength ? "--:--" : root.lengthStr(MediaProgress.length)
             color: Colours.palette.m3onSurfaceVariant
             font: timeMetrics.font
             horizontalAlignment: Text.AlignHCenter
