@@ -12,8 +12,8 @@ Item {
     property var bands: [0, 0, 0, 0, 0]
     property color colour: Colours.palette.m3primary
 
-    implicitWidth: 64
-    implicitHeight: 28
+    implicitWidth: 48
+    implicitHeight: 24
 
     onRunningChanged: {
         if (running && canvas)

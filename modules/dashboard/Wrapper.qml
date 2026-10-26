@@ -31,8 +31,8 @@ Item {
     readonly property bool enabled: Config.dashboard.enabled
     readonly property bool expanded: screenState.dashboard && enabled
     readonly property real nonAnimHeight: (expandedContent.item as Content)?.nonAnimHeight ?? 0
-    readonly property real compactHeight: Math.max(36, compact.implicitHeight + Tokens.padding.small * 2)
-    readonly property real compactWidth: Math.max(96, compact.implicitWidth + Tokens.padding.large * 2)
+    readonly property real compactHeight: Math.max(36, compact.implicitHeight + Tokens.padding.extraSmall * 2)
+    readonly property real compactWidth: Math.max(96, compact.implicitWidth + Tokens.padding.medium * 2)
     readonly property real expandedWidth: (expandedContent.item as Content)?.nonAnimWidth || expandedWidthCache || 1064
     readonly property real expandedHeight: (expandedContent.item as Content)?.nonAnimHeight || expandedHeightCache || 420
     property real expandedWidthCache: 0

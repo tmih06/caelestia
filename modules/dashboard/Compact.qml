@@ -18,12 +18,8 @@ Item {
     readonly property bool media: !recording && !!player
     readonly property bool playing: media && (player?.isPlaying ?? false)
     readonly property string title: visibleText(player?.trackTitle) || visibleText(Players.getIdentity(player)) || Tr.tr("Unknown title")
-    readonly property string subtitle: {
-        const value = visibleText(player?.trackArtist);
-        return value.length > 1 ? value : "";
-    }
     readonly property real mediaWidth: 348
-    readonly property real controlWidth: 64
+    readonly property real controlWidth: 48
     readonly property bool hovered: mouse.containsMouse
     readonly property bool controlsVisible: media && (!playing || hovered)
     readonly property int hoveredControl: controlsVisible && mouse.containsMouse && mouse.x >= width - controlWidth ? 1 : 0
@@ -65,7 +61,7 @@ Item {
     }
 
     implicitWidth: media ? mediaWidth : row.implicitWidth
-    implicitHeight: Math.max(28, row.implicitHeight)
+    implicitHeight: Math.max(24, row.implicitHeight)
     enabled: active
 
     onActiveChanged: {
@@ -93,8 +89,8 @@ Item {
         ClipRect {
             visible: root.media
             Layout.alignment: Qt.AlignVCenter
-            implicitWidth: 28
-            implicitHeight: 28
+            implicitWidth: 24
+            implicitHeight: 24
             radius: Tokens.rounding.small
             color: Colours.palette.m3surfaceContainerHighest
 
@@ -114,43 +110,27 @@ Item {
             }
         }
 
-        ColumnLayout {
+        Item {
+            id: titleViewport
+
             visible: root.media
             Layout.fillWidth: true
             Layout.minimumWidth: 0
             Layout.alignment: Qt.AlignVCenter
-            spacing: 1
+            implicitHeight: titleText.implicitHeight
+            clip: true
 
-            Item {
-                id: titleViewport
-
-                Layout.fillWidth: true
-                Layout.minimumWidth: 0
-                implicitHeight: titleText.implicitHeight
-                clip: true
-
-                onWidthChanged: root.resetMarquee()
-
-                StyledText {
-                    id: titleText
-
-                    width: implicitWidth
-                    text: root.title
-                    font: Tokens.font.body.small
-                    color: Colours.palette.m3onSurface
-
-                    onImplicitWidthChanged: root.resetMarquee()
-                }
-            }
+            onWidthChanged: root.resetMarquee()
 
             StyledText {
-                visible: text.length > 0
-                Layout.fillWidth: true
-                Layout.minimumWidth: 0
-                text: root.subtitle
-                font: Tokens.font.label.small
-                color: Colours.palette.m3onSurfaceVariant
-                elide: Text.ElideRight
+                id: titleText
+
+                width: implicitWidth
+                text: root.title
+                font: Tokens.font.body.small
+                color: Colours.palette.m3onSurface
+
+                onImplicitWidthChanged: root.resetMarquee()
             }
         }
 
@@ -158,7 +138,7 @@ Item {
             visible: root.media
             Layout.alignment: Qt.AlignVCenter
             implicitWidth: root.controlWidth
-            implicitHeight: 28
+            implicitHeight: 24
 
             AudioWave {
                 anchors.fill: parent
@@ -180,9 +160,11 @@ Item {
                 }
             }
 
-            Row {
+            ControlButton {
                 anchors.centerIn: parent
-                spacing: 4
+                icon: root.playing ? "stop" : "play_arrow"
+                control: 1
+                tint: Colours.palette.m3primary
                 opacity: root.controlsVisible ? 1 : 0
                 scale: root.controlsVisible ? 1 : 0.82
                 visible: opacity > 0
@@ -197,12 +179,6 @@ Item {
                     Anim {
                         type: Anim.FastSpatial
                     }
-                }
-
-                ControlButton {
-                    icon: root.playing ? "stop" : "play_arrow"
-                    control: 1
-                    tint: Colours.palette.m3primary
                 }
             }
         }
@@ -313,8 +289,8 @@ Item {
         readonly property bool hovered: root.hoveredControl === control
         readonly property bool pressed: root.pressedControl === control
 
-        implicitWidth: 28
-        implicitHeight: 28
+        implicitWidth: 24
+        implicitHeight: 24
 
         StyledRect {
             anchors.fill: parent
