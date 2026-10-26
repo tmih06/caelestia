@@ -10,6 +10,7 @@ Region {
 
     required property Bar.BarWrapper bar
     required property Panels panels
+    required property Item dashboard
     required property var win
 
     readonly property real borderThickness: win.contentItem.Config.border.thickness
@@ -22,9 +23,11 @@ Region {
     intersection: Intersection.Xor
 
     R {
-        panel: root.panels.dashboard
-        y: 0
-        height: panel.height * (1 - root.panels.dashboard.offsetScale) + root.borderThickness
+        panel: root.dashboard
+        x: panel?.x ?? 0
+        y: panel?.y ?? 0
+        width: panel?.width ?? 0
+        height: panel?.visible ? panel.height : 0
     }
 
     R {

@@ -3,7 +3,6 @@ import Quickshell
 import Caelestia.Config
 import qs.components
 import qs.modules.bar as Bar
-import qs.modules.dashboard as Dashboard
 import qs.modules.launcher as Launcher
 import qs.modules.notifications as Notifications
 import qs.modules.osd as Osd
@@ -20,6 +19,7 @@ Item {
     required property ScreenState screenState
     required property Bar.BarWrapper bar
     required property real borderThickness
+    property Item dashboard
 
     readonly property alias osd: osd
     readonly property alias osdWrapper: osdWrapper
@@ -27,7 +27,6 @@ Item {
     readonly property alias session: session
     readonly property alias sessionWrapper: sessionWrapper
     readonly property alias launcher: launcher
-    readonly property alias dashboard: dashboard
     readonly property alias popouts: popoutsWrapper.content
     readonly property alias popoutsWrapper: popoutsWrapper
     readonly property alias utilities: utilities
@@ -105,15 +104,6 @@ Item {
 
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
-    }
-
-    Dashboard.Wrapper {
-        id: dashboard
-
-        screenState: root.screenState
-
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.top: parent.top
     }
 
     BarPopouts.ClipWrapper {

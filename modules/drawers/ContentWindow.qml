@@ -106,6 +106,7 @@ StyledWindow {
 
         bar: bar
         panels: panels
+        dashboard: interactions.dashboard
         win: root
     }
 
@@ -177,8 +178,12 @@ StyledWindow {
         PanelBg {
             id: dashBg
 
-            panel: panels.dashboard
-            deformAmount: 0.1
+            panel: interactions.dashboard
+            visible: panel?.visible ?? false
+            deformAmount: 0
+            x: panel?.x ?? 0
+            y: panel?.y ?? 0
+            radius: panel ? Tokens.rounding.extraLarge * panel.morph + panel.compactHeight / 2 * (1 - panel.morph) : 0
         }
 
         PanelBg {
@@ -266,13 +271,11 @@ StyledWindow {
             screenState: root.screenState
             bar: bar
             borderThickness: root.borderThickness
+            dashboard: interactions.dashboard
 
             utilities.horizontalStretch: (sidebarBg.rawDeformMatrix.m11 - 1) / 2 + 1
             utilities.deformMatrix: utilsBg.rawDeformMatrix
 
-            dashboard.transform: Matrix4x4 {
-                matrix: dashBg.deformMatrix
-            }
             launcher.transform: Matrix4x4 {
                 matrix: launcherBg.deformMatrix
             }
@@ -339,10 +342,10 @@ StyledWindow {
         property real deformAmount: 0.15
 
         group: blobGroup
-        x: panel.x + bar.implicitWidth
-        y: panel.y + root.borderThickness
-        implicitWidth: panel.width
-        implicitHeight: panel.height
+        x: panel ? panel.x + bar.implicitWidth : 0
+        y: panel ? panel.y + root.borderThickness : 0
+        implicitWidth: panel?.width ?? 0
+        implicitHeight: panel?.height ?? 0
         radius: Tokens.rounding.extraLarge
         deformScale: (deformAmount * Config.appearance.deformScale) / 10000
     }
