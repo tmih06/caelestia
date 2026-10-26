@@ -18,6 +18,10 @@ Item {
     readonly property bool media: !recording && !!player
     readonly property bool playing: media && (player?.isPlaying ?? false)
     readonly property string title: visibleText(player?.trackTitle) || visibleText(Players.getIdentity(player)) || Tr.tr("Unknown title")
+    readonly property real position: player?.position ?? 0
+    readonly property real length: player?.length ?? 0
+    readonly property bool hasProgress: media && (player?.positionSupported ?? false) && Number.isFinite(length) && length > 0
+    readonly property real progress: hasProgress ? Math.max(0, Math.min(1, position / length)) : 0
     readonly property real mediaWidth: 348
     readonly property real controlWidth: 32
     readonly property bool hovered: hover.hovered
@@ -108,27 +112,56 @@ Item {
             }
         }
 
-        Item {
-            id: titleViewport
-
+        ColumnLayout {
             visible: root.media
             Layout.fillWidth: true
             Layout.minimumWidth: 0
             Layout.alignment: Qt.AlignVCenter
-            implicitHeight: titleText.implicitHeight
-            clip: true
+            spacing: 2
 
-            onWidthChanged: root.resetMarquee()
+            Item {
+                id: titleViewport
 
-            StyledText {
-                id: titleText
+                Layout.fillWidth: true
+                Layout.minimumWidth: 0
+                implicitHeight: titleText.implicitHeight
+                clip: true
 
-                width: implicitWidth
-                text: root.title
-                font: Tokens.font.body.small
-                color: Colours.palette.m3onSurface
+                onWidthChanged: root.resetMarquee()
 
-                onImplicitWidthChanged: root.resetMarquee()
+                StyledText {
+                    id: titleText
+
+                    width: implicitWidth
+                    text: root.title
+                    font: Tokens.font.body.small
+                    color: Colours.palette.m3onSurface
+
+                    onImplicitWidthChanged: root.resetMarquee()
+                }
+            }
+
+            StyledRect {
+                visible: root.hasProgress
+                Layout.fillWidth: true
+                Layout.preferredHeight: 2
+                radius: height / 2
+                color: Qt.alpha(Colours.palette.m3onSurface, 0.14)
+
+                StyledRect {
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: parent.width * root.progress
+                    height: parent.height
+                    radius: height / 2
+                    color: Colours.palette.m3primary
+
+                    Behavior on width {
+                        Anim {
+                            type: Anim.FastEffects
+                        }
+                    }
+                }
             }
         }
 
@@ -263,6 +296,15 @@ Item {
             property: "x"
             value: 0
         }
+    }
+
+    Timer {
+        interval: GlobalConfig.dashboard.mediaUpdateInterval
+        repeat: true
+        running: root.active && root.media && root.playing && (root.player?.positionSupported ?? false)
+        triggeredOnStart: true
+
+        onTriggered: root.player?.positionChanged()
     }
 
     HoverHandler {
