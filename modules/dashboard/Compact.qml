@@ -57,7 +57,7 @@ Item {
         if (!player)
             return;
         if (playing)
-            player.stop();
+            player.pause();
         else
             player.play();
     }
@@ -208,7 +208,7 @@ Item {
 
             ControlButton {
                 anchors.centerIn: parent
-                icon: root.playing ? "stop" : "play_arrow"
+                icon: root.playing ? "pause" : "play_arrow"
                 control: 1
                 tint: Colours.palette.m3primary
                 opacity: root.controlsVisible ? 1 : 0
