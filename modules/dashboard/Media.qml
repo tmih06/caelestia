@@ -11,6 +11,7 @@ Item {
     id: root
 
     required property ScreenState screenState
+    property real dockMorph: 1
 
     implicitWidth: Tokens.sizes.dashboard.mediaTabWidth
     implicitHeight: Tokens.sizes.dashboard.mediaTabHeight
@@ -27,6 +28,7 @@ Item {
         CoverVisualiser {
             Layout.fillHeight: true
             implicitWidth: Tokens.sizes.dashboard.mediaSectionWidth
+            dockMorph: root.dockMorph
         }
 
         Item {
@@ -139,6 +141,7 @@ Item {
 
                     Details {
                         Layout.fillWidth: true
+                        dockMorph: root.dockMorph
                     }
 
                     LyricsAndSelector {

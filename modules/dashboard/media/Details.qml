@@ -11,7 +11,18 @@ import qs.services
 ColumnLayout {
     id: root
 
+    property real dockMorph: 1
+
     readonly property bool hasUnknownLength: (Players.active?.length ?? 0) > 2147483647
+
+    function playPause(): void {
+        const player = Players.active;
+        if (!player)
+            return;
+        if (!player.isPlaying && player.length > 0 && player.position >= player.length - 0.5 && player.canSeek && player.positionSupported)
+            player.position = 0;
+        player.togglePlaying();
+    }
 
     function lengthStr(length: int): string {
         if (length < 0)
@@ -37,6 +48,11 @@ ColumnLayout {
     }
 
     StyledText {
+        id: titleLabel
+
+        objectName: "dockMorphTitle"
+
+        opacity: dockMorph > 0.85 ? Math.min(1, (dockMorph - 0.85) / 0.15) : 0
         Layout.fillWidth: true
         text: Players.active?.trackTitle ?? ""
         font: Tokens.font.title.large
@@ -87,8 +103,11 @@ ColumnLayout {
         StyledSlider {
             id: positionSlider
 
+            objectName: "dockMorphTimeline"
+
+            opacity: root.dockMorph > 0.85 ? Math.min(1, (root.dockMorph - 0.85) / 0.15) : 0
             Layout.fillWidth: true
-            value: Players.active ? Players.active.position / (Players.active.length || 1) : 0
+            value: Players.active ? Math.max(0, Math.min(1, Players.active.position / (Players.active.length || 1))) : 0
             enabled: (Players.active?.canSeek ?? false) && !root.hasUnknownLength
             wavy: true
             animateWave: Players.active?.isPlaying ?? false
@@ -157,7 +176,7 @@ ColumnLayout {
             checked: Players.active?.isPlaying ?? false
             font: Tokens.font.icon.large
             disabled: !Players.active?.canTogglePlaying
-            onClicked: Players.active?.togglePlaying()
+            onClicked: root.playPause()
         }
 
         IconButton {

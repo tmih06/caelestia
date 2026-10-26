@@ -14,28 +14,33 @@ Item {
 
     required property ScreenState screenState
     required property FileDialog facePicker
+    property real dockMorph: 1
 
     readonly property var dashboardTabs: {
         const allTabs = [
             {
+                id: "dashboard",
                 component: dashComponent,
                 iconName: "dashboard",
                 text: Tr.tr("Dashboard"),
                 enabled: Config.dashboard.showDashboard
             },
             {
+                id: "media",
                 component: mediaComponent,
                 iconName: "queue_music",
                 text: Tr.tr("Media"),
                 enabled: Config.dashboard.showMedia
             },
             {
+                id: "performance",
                 component: performanceComponent,
                 iconName: "speed",
                 text: Tr.tr("Performance"),
                 enabled: Config.dashboard.showPerformance
             },
             {
+                id: "weather",
                 component: weatherComponent,
                 iconName: "cloud",
                 text: Tr.tr("Weather"),
@@ -166,6 +171,7 @@ Item {
 
                 Media {
                     screenState: root.screenState
+                    dockMorph: root.dockMorph
                 }
             }
 

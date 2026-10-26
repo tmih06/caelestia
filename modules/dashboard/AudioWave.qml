@@ -78,7 +78,7 @@ Item {
             const centres = [0.08, 0.29, 0.5, 0.71, 0.92];
             const spread = 0.12;
             const mid = height / 2;
-            const maxAmplitude = height / 2 - 4;
+            const maxAmplitude = Math.min(24, height / 2 - 4);
 
             function envelope(t) {
                 let value = 0;

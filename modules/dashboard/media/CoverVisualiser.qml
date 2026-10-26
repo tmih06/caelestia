@@ -14,10 +14,22 @@ import qs.services
 Item {
     id: root
 
+    property real dockMorph: 1
+
     readonly property real centerX: width / 2
     readonly property real centerY: height / 2
     readonly property real spacing: Tokens.spacing.medium
     readonly property real maxMagnitude: (implicitWidth - cover.implicitWidth) / 2 - spacing
+
+    objectName: "dockMorphWave"
+    opacity: dockMorph > 0.85 ? Math.min(1, (dockMorph - 0.85) / 0.15) : 0
+    visible: opacity > 0
+
+    Behavior on opacity {
+        Anim {
+            type: Anim.FastEffects
+        }
+    }
 
     ServiceRef {
         service: Audio.cava
@@ -74,6 +86,8 @@ Item {
 
     CoverArt {
         id: cover
+
+        objectName: "dockMorphCover"
 
         anchors.centerIn: parent
         shape.shape: MaterialShape.Cookie9Sided
