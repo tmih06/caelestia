@@ -17,22 +17,27 @@ Item {
     readonly property bool recording: Recorder.running
     readonly property bool media: !recording && !!player
     readonly property bool playing: media && (player?.isPlaying ?? false)
-    readonly property string title: player?.trackTitle || Players.getIdentity(player) || Tr.tr("Unknown title")
-    readonly property string subtitle: player?.trackArtist ?? ""
+    readonly property string title: visibleText(player?.trackTitle) || visibleText(Players.getIdentity(player)) || Tr.tr("Unknown title")
+    readonly property string subtitle: {
+        const value = visibleText(player?.trackArtist);
+        return value.length > 1 ? value : "";
+    }
     readonly property real mediaWidth: 348
     readonly property real controlWidth: 64
     readonly property bool hovered: mouse.containsMouse
     readonly property bool controlsVisible: media && (!playing || hovered)
-    readonly property int hoveredControl: {
-        if (!controlsVisible || !mouse.containsMouse || mouse.x < width - controlWidth)
-            return 0;
-        return mouse.x < width - controlWidth / 2 ? 1 : 2;
-    }
+    readonly property int hoveredControl: controlsVisible && mouse.containsMouse && mouse.x >= width - controlWidth ? 1 : 0
     readonly property bool marqueeOverflow: titleViewport.width > 0 && titleText.implicitWidth > titleViewport.width + 1
     readonly property real marqueeDistance: Math.max(0, titleText.implicitWidth - titleViewport.width)
     property int pressedControl: 0
 
     signal expandRequested()
+
+    function visibleText(value: string): string {
+        if (!value)
+            return "";
+        return value.replace(/[\s\u00A0\u034F\u1680\u2000-\u200F\u2028-\u202F\u205F-\u206F\u2800\u3164\uFEFF\uFFA0]+/g, " ").trim();
+    }
 
     function formatElapsed(seconds: real): string {
         const total = Math.max(0, Math.floor(seconds));
@@ -50,18 +55,13 @@ Item {
             marquee.restart();
     }
 
-    function togglePlayback(): void {
+    function primaryAction(): void {
         if (!player)
             return;
         if (playing)
-            player.pause();
+            player.stop();
         else
             player.play();
-    }
-
-    function stopPlayback(): void {
-        if (player)
-            player.stop();
     }
 
     implicitWidth: media ? mediaWidth : row.implicitWidth
@@ -200,15 +200,9 @@ Item {
                 }
 
                 ControlButton {
-                    icon: root.playing ? "pause" : "play_arrow"
+                    icon: root.playing ? "stop" : "play_arrow"
                     control: 1
                     tint: Colours.palette.m3primary
-                }
-
-                ControlButton {
-                    icon: "stop"
-                    control: 2
-                    tint: Colours.palette.m3onSurfaceVariant
                 }
             }
         }
@@ -303,9 +297,7 @@ Item {
         onCanceled: root.pressedControl = 0
         onClicked: {
             if (root.hoveredControl === 1)
-                root.togglePlayback();
-            else if (root.hoveredControl === 2)
-                root.stopPlayback();
+                root.primaryAction();
             else
                 root.expandRequested();
         }
