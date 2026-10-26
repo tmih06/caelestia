@@ -90,8 +90,6 @@ Item {
 
             anchors.centerIn: parent
             active: !root.expanded
-
-            onExpandRequested: root.screenState.dashboard = true
         }
     }
 

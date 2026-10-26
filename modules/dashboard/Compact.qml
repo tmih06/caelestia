@@ -20,14 +20,12 @@ Item {
     readonly property string title: visibleText(player?.trackTitle) || visibleText(Players.getIdentity(player)) || Tr.tr("Unknown title")
     readonly property real mediaWidth: 348
     readonly property real controlWidth: 48
-    readonly property bool hovered: mouse.containsMouse
+    readonly property bool hovered: hover.hovered
     readonly property bool controlsVisible: media && (!playing || hovered)
-    readonly property int hoveredControl: controlsVisible && mouse.containsMouse && mouse.x >= width - controlWidth ? 1 : 0
+    readonly property int hoveredControl: controlsVisible && hover.hovered && hover.point.position.x >= width - controlWidth ? 1 : 0
     readonly property bool marqueeOverflow: titleViewport.width > 0 && titleText.implicitWidth > titleViewport.width + 1
     readonly property real marqueeDistance: Math.max(0, titleText.implicitWidth - titleViewport.width)
     property int pressedControl: 0
-
-    signal expandRequested()
 
     function visibleText(value: string): string {
         if (!value)
@@ -181,6 +179,18 @@ Item {
                     }
                 }
             }
+
+            MouseArea {
+                anchors.fill: parent
+                enabled: root.controlsVisible
+                acceptedButtons: Qt.LeftButton
+                cursorShape: Qt.PointingHandCursor
+
+                onPressed: root.pressedControl = 1
+                onReleased: root.pressedControl = 0
+                onCanceled: root.pressedControl = 0
+                onClicked: root.primaryAction()
+            }
         }
 
         StyledRect {
@@ -255,28 +265,10 @@ Item {
         }
     }
 
-    MouseArea {
-        id: mouse
+    HoverHandler {
+        id: hover
 
-        anchors.fill: parent
         enabled: root.active
-        hoverEnabled: true
-        acceptedButtons: Qt.LeftButton
-        cursorShape: Qt.PointingHandCursor
-
-        onContainsMouseChanged: {
-            if (!containsMouse)
-                root.pressedControl = 0;
-        }
-        onPressed: root.pressedControl = root.hoveredControl
-        onReleased: root.pressedControl = 0
-        onCanceled: root.pressedControl = 0
-        onClicked: {
-            if (root.hoveredControl === 1)
-                root.primaryAction();
-            else
-                root.expandRequested();
-        }
     }
 
     component ControlButton: Item {
