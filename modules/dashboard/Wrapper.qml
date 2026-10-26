@@ -89,14 +89,9 @@ Item {
             id: compact
 
             anchors.centerIn: parent
-        }
+            active: !root.expanded
 
-        MouseArea {
-            anchors.fill: parent
-            enabled: !root.expanded
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: root.screenState.dashboard = true
+            onExpandRequested: root.screenState.dashboard = true
         }
     }
 

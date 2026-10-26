@@ -4,7 +4,6 @@ import QtQuick
 import QtQuick.Layouts
 import Caelestia.Config
 import Caelestia.I18n
-import Caelestia.Services
 import qs.components
 import qs.components.images
 import qs.services
@@ -12,11 +11,28 @@ import qs.services
 Item {
     id: root
 
+    property bool active: true
+
     readonly property var player: Players.active
     readonly property bool recording: Recorder.running
     readonly property bool media: !recording && !!player
     readonly property bool playing: media && (player?.isPlaying ?? false)
     readonly property string title: player?.trackTitle || Players.getIdentity(player) || Tr.tr("Unknown title")
+    readonly property string subtitle: player?.trackArtist ?? ""
+    readonly property real mediaWidth: 348
+    readonly property real controlWidth: 64
+    readonly property bool hovered: mouse.containsMouse
+    readonly property bool controlsVisible: media && (!playing || hovered)
+    readonly property int hoveredControl: {
+        if (!controlsVisible || !mouse.containsMouse || mouse.x < width - controlWidth)
+            return 0;
+        return mouse.x < width - controlWidth / 2 ? 1 : 2;
+    }
+    readonly property bool marqueeOverflow: titleViewport.width > 0 && titleText.implicitWidth > titleViewport.width + 1
+    readonly property real marqueeDistance: Math.max(0, titleText.implicitWidth - titleViewport.width)
+    property int pressedControl: 0
+
+    signal expandRequested()
 
     function formatElapsed(seconds: real): string {
         const total = Math.max(0, Math.floor(seconds));
@@ -26,44 +42,59 @@ Item {
         return hours > 0 ? `${hours}:${minutes.toString().padStart(2, "0")}:${remainder}` : `${minutes}:${remainder}`;
     }
 
-    implicitWidth: row.implicitWidth
-    implicitHeight: Math.max(24, row.implicitHeight)
+    function resetMarquee(): void {
+        if (!titleText)
+            return;
+        titleText.x = 0;
+        if (marqueeOverflow && active && marquee)
+            marquee.restart();
+    }
 
-    ServiceRef {
-        service: Audio.cava
+    function togglePlayback(): void {
+        if (!player)
+            return;
+        if (playing)
+            player.pause();
+        else
+            player.play();
+    }
+
+    function stopPlayback(): void {
+        if (player)
+            player.stop();
+    }
+
+    implicitWidth: media ? mediaWidth : row.implicitWidth
+    implicitHeight: Math.max(28, row.implicitHeight)
+    enabled: active
+
+    onActiveChanged: {
+        if (active && titleText) {
+            titleText.x = 0;
+            if (marqueeOverflow && marquee)
+                marquee.restart();
+        }
+    }
+    onMarqueeOverflowChanged: {
+        if (!marqueeOverflow) {
+            if (marquee)
+                marquee.stop();
+            if (titleText)
+                titleText.x = 0;
+        }
     }
 
     RowLayout {
         id: row
 
-        anchors.centerIn: parent
+        anchors.fill: parent
         spacing: Tokens.spacing.small
-
-        StyledRect {
-            visible: root.recording
-            implicitWidth: 7
-            implicitHeight: 7
-            radius: Tokens.rounding.full
-            color: Recorder.paused ? Colours.palette.m3tertiary : Colours.palette.m3error
-        }
-
-        StyledText {
-            visible: root.recording
-            text: Recorder.paused ? Tr.tr("PAUSED") : Tr.tr("REC")
-            color: Recorder.paused ? Colours.palette.m3tertiary : Colours.palette.m3error
-            font: Tokens.font.label.small
-        }
-
-        StyledText {
-            visible: root.recording
-            text: root.formatElapsed(Recorder.elapsed)
-            font: Tokens.font.mono.small
-        }
 
         ClipRect {
             visible: root.media
-            implicitWidth: 24
-            implicitHeight: 24
+            Layout.alignment: Qt.AlignVCenter
+            implicitWidth: 28
+            implicitHeight: 28
             radius: Tokens.rounding.small
             color: Colours.palette.m3surfaceContainerHighest
 
@@ -83,50 +114,132 @@ Item {
             }
         }
 
-        StyledText {
+        ColumnLayout {
             visible: root.media
-            Layout.maximumWidth: 150
+            Layout.fillWidth: true
             Layout.minimumWidth: 0
-            text: root.title
-            font: Tokens.font.body.small
-            elide: Text.ElideRight
+            Layout.alignment: Qt.AlignVCenter
+            spacing: 1
+
+            Item {
+                id: titleViewport
+
+                Layout.fillWidth: true
+                Layout.minimumWidth: 0
+                implicitHeight: titleText.implicitHeight
+                clip: true
+
+                onWidthChanged: root.resetMarquee()
+
+                StyledText {
+                    id: titleText
+
+                    width: implicitWidth
+                    text: root.title
+                    font: Tokens.font.body.small
+                    color: Colours.palette.m3onSurface
+
+                    onImplicitWidthChanged: root.resetMarquee()
+                }
+            }
+
+            StyledText {
+                visible: text.length > 0
+                Layout.fillWidth: true
+                Layout.minimumWidth: 0
+                text: root.subtitle
+                font: Tokens.font.label.small
+                color: Colours.palette.m3onSurfaceVariant
+                elide: Text.ElideRight
+            }
         }
 
-        Row {
-            visible: root.media && root.playing
+        Item {
+            visible: root.media
+            Layout.alignment: Qt.AlignVCenter
+            implicitWidth: root.controlWidth
+            implicitHeight: 28
 
-            spacing: 2
+            AudioWave {
+                anchors.fill: parent
+                running: root.active && root.playing && !root.controlsVisible
+                opacity: root.controlsVisible ? 0 : 1
+                scale: root.controlsVisible ? 0.82 : 1
+                visible: opacity > 0
 
-            Repeater {
-                model: 4
-
-                StyledRect {
-                    required property int index
-
-                    anchors.verticalCenter: parent.verticalCenter
-                    implicitWidth: 2
-                    implicitHeight: 2 + Math.max(0, Math.min(1, Audio.cava.values[index] ?? 0)) * 12
-                    radius: Tokens.rounding.full
-                    color: Colours.palette.m3primary
-
-                    Behavior on implicitHeight {
-                        Anim {
-                            type: Anim.FastEffects
-                        }
+                Behavior on opacity {
+                    Anim {
+                        type: Anim.FastEffects
                     }
+                }
+
+                Behavior on scale {
+                    Anim {
+                        type: Anim.FastSpatial
+                    }
+                }
+            }
+
+            Row {
+                anchors.centerIn: parent
+                spacing: 4
+                opacity: root.controlsVisible ? 1 : 0
+                scale: root.controlsVisible ? 1 : 0.82
+                visible: opacity > 0
+
+                Behavior on opacity {
+                    Anim {
+                        type: Anim.FastEffects
+                    }
+                }
+
+                Behavior on scale {
+                    Anim {
+                        type: Anim.FastSpatial
+                    }
+                }
+
+                ControlButton {
+                    icon: root.playing ? "pause" : "play_arrow"
+                    control: 1
+                    tint: Colours.palette.m3primary
+                }
+
+                ControlButton {
+                    icon: "stop"
+                    control: 2
+                    tint: Colours.palette.m3onSurfaceVariant
                 }
             }
         }
 
-        MaterialIcon {
-            visible: root.media && !root.playing
-            text: "pause"
-            color: Colours.palette.m3onSurfaceVariant
-            fontStyle: Tokens.font.icon.small
+        StyledRect {
+            visible: root.recording
+            Layout.alignment: Qt.AlignVCenter
+            implicitWidth: 7
+            implicitHeight: 7
+            radius: Tokens.rounding.full
+            color: Recorder.paused ? Colours.palette.m3tertiary : Colours.palette.m3error
+        }
+
+        StyledText {
+            visible: root.recording
+            Layout.alignment: Qt.AlignVCenter
+            text: Recorder.paused ? Tr.tr("PAUSED") : Tr.tr("REC")
+            color: Recorder.paused ? Colours.palette.m3tertiary : Colours.palette.m3error
+            font: Tokens.font.label.small
+        }
+
+        StyledText {
+            visible: root.recording
+            Layout.alignment: Qt.AlignVCenter
+            text: root.formatElapsed(Recorder.elapsed)
+            font: Tokens.font.mono.small
         }
 
         StyledRect {
             visible: !root.media && !root.recording
+            Layout.alignment: Qt.AlignVCenter
             implicitWidth: 6
             implicitHeight: 6
             radius: Tokens.rounding.full
@@ -135,9 +248,107 @@ Item {
 
         StyledText {
             visible: !root.media && !root.recording
+            Layout.alignment: Qt.AlignVCenter
             text: Time.timeStr
             color: Colours.palette.m3onSurface
             font: Tokens.font.body.builders.small.weight(Font.DemiBold).build()
+        }
+    }
+
+    SequentialAnimation {
+        id: marquee
+
+        loops: Animation.Infinite
+        running: root.active && root.marqueeOverflow
+
+        PauseAnimation {
+            duration: 1500
+        }
+
+        NumberAnimation {
+            target: titleText
+            property: "x"
+            from: 0
+            to: -root.marqueeDistance
+            duration: Math.max(2500, root.marqueeDistance * 20)
+            easing.type: Easing.Linear
+        }
+
+        PauseAnimation {
+            duration: 1400
+        }
+
+        PropertyAction {
+            target: titleText
+            property: "x"
+            value: 0
+        }
+    }
+
+    MouseArea {
+        id: mouse
+
+        anchors.fill: parent
+        enabled: root.active
+        hoverEnabled: true
+        acceptedButtons: Qt.LeftButton
+        cursorShape: Qt.PointingHandCursor
+
+        onContainsMouseChanged: {
+            if (!containsMouse)
+                root.pressedControl = 0;
+        }
+        onPressed: root.pressedControl = root.hoveredControl
+        onReleased: root.pressedControl = 0
+        onCanceled: root.pressedControl = 0
+        onClicked: {
+            if (root.hoveredControl === 1)
+                root.togglePlayback();
+            else if (root.hoveredControl === 2)
+                root.stopPlayback();
+            else
+                root.expandRequested();
+        }
+    }
+
+    component ControlButton: Item {
+        id: button
+
+        required property string icon
+        required property int control
+        property color tint: Colours.palette.m3onSurface
+
+        readonly property bool hovered: root.hoveredControl === control
+        readonly property bool pressed: root.pressedControl === control
+
+        implicitWidth: 28
+        implicitHeight: 28
+
+        StyledRect {
+            anchors.fill: parent
+            radius: Tokens.rounding.full
+            color: Colours.palette.m3onSurface
+            opacity: button.hovered || button.pressed ? (button.pressed ? 0.16 : 0.08) : 0
+
+            Behavior on opacity {
+                Anim {
+                    type: Anim.FastEffects
+                }
+            }
+        }
+
+        MaterialIcon {
+            anchors.centerIn: parent
+            text: button.icon
+            color: button.tint
+            fontStyle: Tokens.font.icon.small
+            scale: button.pressed ? 0.86 : 1
+
+            Behavior on scale {
+                Anim {
+                    type: Anim.FastSpatial
+                }
+            }
         }
     }
 }
