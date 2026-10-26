@@ -12,7 +12,7 @@ Item {
     property var bands: [0, 0, 0, 0, 0]
     property color colour: Colours.palette.m3primary
 
-    implicitWidth: 48
+    implicitWidth: 32
     implicitHeight: 24
 
     onRunningChanged: {

@@ -19,7 +19,7 @@ Item {
     readonly property bool playing: media && (player?.isPlaying ?? false)
     readonly property string title: visibleText(player?.trackTitle) || visibleText(Players.getIdentity(player)) || Tr.tr("Unknown title")
     readonly property real mediaWidth: 348
-    readonly property real controlWidth: 48
+    readonly property real controlWidth: 32
     readonly property bool hovered: hover.hovered
     readonly property bool controlsVisible: media && (!playing || hovered)
     readonly property int hoveredControl: controlsVisible && hover.hovered && hover.point.position.x >= width - controlWidth ? 1 : 0
