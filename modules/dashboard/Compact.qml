@@ -162,6 +162,21 @@ Item {
                         }
                     }
                 }
+
+                StyledRect {
+                    anchors.verticalCenter: parent.verticalCenter
+                    x: Math.max(0, Math.min(parent.width - width, parent.width * root.progress - width / 2))
+                    width: 4
+                    height: 4
+                    radius: height / 2
+                    color: Colours.palette.m3primary
+
+                    Behavior on x {
+                        Anim {
+                            type: Anim.FastEffects
+                        }
+                    }
+                }
             }
         }
 
