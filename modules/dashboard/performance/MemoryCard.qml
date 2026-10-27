@@ -20,7 +20,7 @@ StyledRect {
     implicitHeight: layout.implicitHeight + Tokens.padding.large * 2
 
     ServiceRef {
-        service: Memory
+        service: root.enabled && root.visible ? Memory : null
     }
 
     ColumnLayout {

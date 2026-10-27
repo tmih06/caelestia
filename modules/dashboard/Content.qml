@@ -1,7 +1,6 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Layouts
 import Quickshell
 import Caelestia
 import Caelestia.Config
@@ -14,7 +13,15 @@ Item {
 
     required property ScreenState screenState
     required property FileDialog facePicker
-    property real dockMorph: 1
+    property bool sharedMedia: false
+    property bool animatePages: true
+    property real viewportWidth: width
+    property real viewportHeight: height
+
+    readonly property alias tabPosition: view.tabPosition
+    readonly property alias mediaPageOffset: view.mediaPageOffset
+    readonly property rect pageViewport: Qt.rect(viewWrapper.x, viewWrapper.y, view.width, view.height)
+    readonly property bool switchingTabs: view ? Math.abs(view.contentX - (view.currentItem?.x ?? 0)) > 0.5 : false
 
     readonly property var dashboardTabs: {
         const allTabs = [
@@ -53,6 +60,12 @@ Item {
     readonly property real nonAnimWidth: view.implicitWidth + viewWrapper.anchors.margins * 2
     readonly property real nonAnimHeight: tabs.implicitHeight + tabs.anchors.topMargin + view.implicitHeight + viewWrapper.anchors.margins * 2
 
+    function mediaTargetRect(item: Item): rect {
+        const pos = item.mapToItem(root, 0, 0);
+        // Targets are measured in the Media page's settled coordinate system.
+        return Qt.rect(pos.x - root.mediaPageOffset, pos.y, item.width, item.height);
+    }
+
     implicitWidth: nonAnimWidth
     implicitHeight: nonAnimHeight
 
@@ -61,73 +74,133 @@ Item {
 
         anchors.top: parent.top
         anchors.left: parent.left
-        anchors.right: parent.right
+        width: Math.max(0, root.viewportWidth - anchors.margins * 2)
         anchors.topMargin: CUtils.clamp(anchors.margins - Config.border.thickness, 0, anchors.margins)
         anchors.margins: Tokens.padding.large
 
-        nonAnimWidth: root.nonAnimWidth - anchors.margins * 2
+        position: root.tabPosition
         screenState: root.screenState
         tabs: root.dashboardTabs
     }
 
-    ClipRect {
+    Item {
         id: viewWrapper
 
         anchors.top: tabs.bottom
         anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
+        width: Math.max(0, root.viewportWidth - anchors.margins * 2)
+        height: Math.max(0, root.viewportHeight - y - anchors.margins)
         anchors.margins: Tokens.padding.large
 
-        radius: Tokens.rounding.large
-        color: "transparent"
+        clip: true
 
-        Flickable {
+        Item {
             id: view
 
             readonly property int currentIndex: root.screenState.dashboardTab
+            property real contentX: currentItem?.x ?? 0
+            property real dragOrigin: 0
             readonly property Item currentItem: {
                 CUtils.dependency(repeater.count); // Trigger update on count change
                 return repeater.itemAt(currentIndex);
             }
+            readonly property Item mediaPane: {
+                CUtils.dependency(repeater?.count ?? 0);
+                const index = root.dashboardTabs.findIndex(tab => tab.id === "media");
+                return index >= 0 ? repeater?.itemAt(index) ?? null : null;
+            }
+            readonly property real mediaPageOffset: (mediaPane?.x ?? 0) - contentX
+            readonly property real tabPosition: {
+                CUtils.dependency(repeater?.count ?? 0);
+                const count = repeater?.count ?? 0;
+                for (let index = count - 1; index >= 0; --index) {
+                    const page = repeater.itemAt(index);
+                    if (page && contentX >= page.x) {
+                        const next = repeater.itemAt(index + 1);
+                        if (next)
+                            return index + (contentX - page.x) / Math.max(1, next.x - page.x);
+                        const previous = repeater.itemAt(index - 1);
+                        return previous ? index + (contentX - page.x) / Math.max(1, page.x - previous.x) : index;
+                    }
+                }
+                const first = repeater?.itemAt(0);
+                const second = repeater?.itemAt(1);
+                return first && second ? (contentX - first.x) / Math.max(1, second.x - first.x) : 0;
+            }
+
+            function moveTo(value: real): void {
+                contentX = Math.max(0, Math.min(value, repeater.itemAt(repeater.count - 1)?.x ?? 0));
+            }
+
+            function settle(): void {
+                if (!currentItem)
+                    return;
+                let nearest = currentIndex;
+                let distance = Infinity;
+                for (let index = 0; index < repeater.count; index++) {
+                    const delta = Math.abs(contentX - repeater.itemAt(index).x);
+                    if (delta < distance) {
+                        nearest = index;
+                        distance = delta;
+                    }
+                }
+                const offset = contentX - currentItem.x;
+                if (nearest === currentIndex && Math.abs(offset) > currentItem.width / 10)
+                    nearest = Math.max(0, Math.min(currentIndex + (offset > 0 ? 1 : -1), repeater.count - 1));
+                root.screenState.dashboardTab = nearest;
+                contentX = Qt.binding(() => currentItem?.x ?? 0);
+            }
 
             anchors.fill: parent
 
-            flickableDirection: Flickable.HorizontalFlick
+            objectName: "dashboardPager"
 
             implicitWidth: currentItem?.implicitWidth ?? 0
             implicitHeight: currentItem?.implicitHeight ?? 0
 
-            contentX: currentItem?.x ?? 0
-            contentWidth: row.implicitWidth
-            contentHeight: row.implicitHeight
+            DragHandler {
+                id: drag
 
-            onContentXChanged: {
-                if (!moving || !currentItem)
-                    return;
-
-                const x = contentX - currentItem.x;
-                if (x > currentItem.implicitWidth / 2)
-                    root.screenState.dashboardTab = Math.min(root.screenState.dashboardTab + 1, tabs.count - 1);
-                else if (x < -currentItem.implicitWidth / 2)
-                    root.screenState.dashboardTab = Math.max(root.screenState.dashboardTab - 1, 0);
+                target: null
+                yAxis.enabled: false
+                onActiveChanged: {
+                    if (active)
+                        view.dragOrigin = view.contentX;
+                    else
+                        view.settle();
+                }
+                onActiveTranslationChanged: {
+                    if (active)
+                        view.moveTo(view.dragOrigin - activeTranslation.x);
+                }
             }
 
-            onDragEnded: {
-                if (!currentItem)
-                    return;
+            WheelHandler {
+                id: wheel
 
-                const x = contentX - currentItem.x;
-                if (x > currentItem.implicitWidth / 10)
-                    root.screenState.dashboardTab = Math.min(root.screenState.dashboardTab + 1, tabs.count - 1);
-                else if (x < -currentItem.implicitWidth / 10)
-                    root.screenState.dashboardTab = Math.max(root.screenState.dashboardTab - 1, 0);
-                else
-                    contentX = Qt.binding(() => currentItem?.x ?? 0);
+                target: null
+                orientation: Qt.Horizontal
+                acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                onActiveChanged: {
+                    if (!active)
+                        view.settle();
+                }
+                onWheel: event => {
+                    const delta = event.pixelDelta.x || event.angleDelta.x;
+                    if (!delta) {
+                        event.accepted = false;
+                        return;
+                    }
+                    view.moveTo(view.contentX - delta);
+                    event.accepted = true;
+                }
             }
 
-            RowLayout {
+            Row {
                 id: row
+
+                x: -view.contentX
+                spacing: 5
 
                 Repeater {
                     id: repeater
@@ -142,17 +215,11 @@ Item {
                         required property int index
                         required property var modelData
 
-                        Layout.alignment: Qt.AlignTop
-
                         sourceComponent: modelData.component
-
-                        Component.onCompleted: active = Qt.binding(() => {
-                            if (index === view.currentIndex)
-                                return true;
-                            const vx = Math.floor(view.visibleArea.xPosition * view.contentWidth);
-                            const vex = Math.floor(vx + view.visibleArea.widthRatio * view.contentWidth);
-                            return (vx >= x && vx <= x + implicitWidth) || (vex >= x && vex <= x + implicitWidth);
-                        })
+                        asynchronous: true
+                        // Keep positioners measurable; zero opacity culls offscreen rendering.
+                        opacity: index === view.currentIndex || (x < view.contentX + view.width && x + width > view.contentX) ? 1 : 0
+                        enabled: index === view.currentIndex
                     }
                 }
             }
@@ -171,7 +238,8 @@ Item {
 
                 Media {
                     screenState: root.screenState
-                    dockMorph: root.dockMorph
+                    sharedMedia: root.sharedMedia
+                    animateBackground: root.animatePages && !root.switchingTabs && view.mediaPageOffset < view.width && view.mediaPageOffset + (view.mediaPane?.width ?? 0) > 0
                 }
             }
 
@@ -188,16 +256,12 @@ Item {
             }
 
             Behavior on contentX {
-                Anim {}
+                enabled: !drag.active && !wheel.active
+
+                Anim {
+                    type: Anim.DefaultSpatial
+                }
             }
         }
-    }
-
-    Behavior on implicitWidth {
-        Anim {}
-    }
-
-    Behavior on implicitHeight {
-        Anim {}
     }
 }

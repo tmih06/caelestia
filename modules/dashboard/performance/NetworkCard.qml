@@ -17,7 +17,7 @@ StyledRect {
     implicitHeight: Tokens.sizes.dashboard.perfNetworkCardHeight
 
     ServiceRef {
-        service: NetworkUsage
+        service: root.enabled && root.visible ? NetworkUsage : null
     }
 
     ColumnLayout {
@@ -74,6 +74,7 @@ StyledRect {
                     }
 
                     target: NetworkUsage.downloadBuffer
+                    enabled: root.enabled && root.visible
                 }
 
                 NumberAnimation {
@@ -84,6 +85,7 @@ StyledRect {
                     from: 0
                     to: 1
                     running: true
+                    paused: !root.enabled || !root.visible
                     easing.type: Easing.Linear
                     duration: GlobalConfig.dashboard.resourceUpdateInterval
                 }

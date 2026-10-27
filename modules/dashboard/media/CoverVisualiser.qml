@@ -14,25 +14,39 @@ import qs.services
 Item {
     id: root
 
-    property real dockMorph: 1
+    property bool sharedMedia: false
+    property bool animating: true
 
     readonly property real centerX: width / 2
     readonly property real centerY: height / 2
     readonly property real spacing: Tokens.spacing.medium
     readonly property real maxMagnitude: (implicitWidth - cover.implicitWidth) / 2 - spacing
 
-    objectName: "dockMorphWave"
-    opacity: dockMorph > 0.85 ? Math.min(1, (dockMorph - 0.85) / 0.15) : 0
-    visible: opacity > 0
+    function updateValues(): void {
+        if (!animating)
+            return;
+        const values = Audio.cava.values;
+        const paths = bars.instances;
+        for (let i = 0; i < paths.length; i++)
+            paths[i].value = Math.max(1e-2, Math.min(1, values[i] ?? 0));
+    }
 
-    Behavior on opacity {
-        Anim {
-            type: Anim.FastEffects
+    objectName: "dockMorphWave"
+
+    onAnimatingChanged: updateValues()
+    Component.onCompleted: updateValues()
+
+    Connections {
+        function onValuesChanged(): void {
+            root.updateValues();
         }
+
+        target: Audio.cava
+        enabled: root.animating
     }
 
     ServiceRef {
-        service: Audio.cava
+        service: root.enabled && root.visible && (Players.active?.isPlaying ?? false) ? Audio.cava : null
     }
 
     Shape {
@@ -53,14 +67,16 @@ Item {
             id: bar
 
             required property int modelData
-            readonly property real value: Math.max(1e-2, Math.min(1, Audio.cava.values[modelData]))
+            property real value: 1e-2
 
             readonly property real angle: modelData * 2 * Math.PI / GlobalConfig.services.visualiserBars
             readonly property real dist: shapeEdgeDist + value * root.maxMagnitude
             readonly property real shapeEdgeDist: {
-                CUtils.dependency(cover.shape.rotation); // Update when shape rotation changes
-                const sDist = cover.shape.distanceAtAngle(modelData * 360 / GlobalConfig.services.visualiserBars + 90);
-                return sDist + root.spacing + strokeWidth / 2;
+                const shape = coverArt.item?.shape;
+                if (root.sharedMedia || !shape)
+                    return cover.width / 2 + root.spacing + strokeWidth / 2;
+                CUtils.dependency(shape.rotation);
+                return shape.distanceAtAngle(modelData * 360 / GlobalConfig.services.visualiserBars + 90) + root.spacing + strokeWidth / 2;
             }
             readonly property real cos: Math.cos(angle)
             readonly property real sin: Math.sin(angle)
@@ -84,14 +100,25 @@ Item {
         }
     }
 
-    CoverArt {
+    Item {
         id: cover
 
         objectName: "dockMorphCover"
 
         anchors.centerIn: parent
-        shape.shape: MaterialShape.Cookie9Sided
         implicitWidth: Tokens.sizes.dashboard.mediaCoverArtSize
         implicitHeight: Tokens.sizes.dashboard.mediaCoverArtSize
+
+        Loader {
+            id: coverArt
+
+            anchors.fill: parent
+            active: !root.sharedMedia
+
+            sourceComponent: CoverArt {
+                animated: root.animating
+                shape.shape: MaterialShape.Cookie9Sided
+            }
+        }
     }
 }

@@ -26,7 +26,7 @@ Item {
     }
 
     ServiceRef {
-        service: Audio.cava
+        service: root.running ? Audio.cava : null
     }
 
     Timer {

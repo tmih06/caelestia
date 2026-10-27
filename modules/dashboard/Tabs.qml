@@ -12,7 +12,7 @@ import qs.services
 Item {
     id: root
 
-    required property real nonAnimWidth
+    required property real position
     required property ScreenState screenState
     required property var tabs
 
@@ -58,23 +58,26 @@ Item {
     Item {
         id: indicator
 
+        readonly property real position: root.position
+        readonly property int fromIndex: Math.max(0, Math.min(bar.count - 2, Math.floor(position)))
+        readonly property real fraction: position - fromIndex
+        readonly property Item fromTab: bar.itemAt(fromIndex)
+        readonly property Item toTab: bar.itemAt(Math.min(fromIndex + 1, bar.count - 1))
+
         anchors.top: bar.bottom
         anchors.topMargin: 5
 
         implicitWidth: {
-            const tab = bar.currentItem;
-            if (tab)
-                return tab.implicitWidth;
-            const width = (root.nonAnimWidth - bar.spacing * (bar.count - 1)) / bar.count;
-            return width;
+            const from = fromTab?.implicitWidth ?? 0;
+            const to = toTab?.implicitWidth ?? from;
+            return from + (to - from) * fraction;
         }
         implicitHeight: 3
 
         x: {
-            const tab = bar.currentItem;
-            const width = (root.nonAnimWidth - bar.spacing * (bar.count - 1)) / bar.count;
-            const tabWidth = tab?.implicitWidth ?? width;
-            return width * bar.currentIndex + (width - tabWidth) / 2;
+            const from = fromTab ? fromTab.x + fromTab.width / 2 : 0;
+            const to = toTab ? toTab.x + toTab.width / 2 : from;
+            return from + (to - from) * fraction - implicitWidth / 2;
         }
 
         clip: true
@@ -87,14 +90,6 @@ Item {
 
             color: Colours.palette.m3primary
             radius: Tokens.rounding.full
-        }
-
-        Behavior on x {
-            Anim {}
-        }
-
-        Behavior on implicitWidth {
-            Anim {}
         }
     }
 

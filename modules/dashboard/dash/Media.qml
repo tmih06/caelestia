@@ -32,7 +32,7 @@ Item {
     }
 
     Timer {
-        running: Players.active?.isPlaying ?? false
+        running: root.enabled && root.visible && (Players.active?.isPlaying ?? false)
         interval: GlobalConfig.dashboard.mediaUpdateInterval
         triggeredOnStart: true
         repeat: true
@@ -40,7 +40,7 @@ Item {
     }
 
     ServiceRef {
-        service: Audio.beatTracker
+        service: root.enabled && root.visible ? Audio.beatTracker : null
     }
 
     CircularProgress {
@@ -58,7 +58,7 @@ Item {
         wavy: true
         waveFrequency: 8
         waveDuration: 2000
-        wavePaused: !Players.active?.isPlaying
+        wavePaused: !root.enabled || !Players.active?.isPlaying
     }
 
     CoverArt {
@@ -172,7 +172,7 @@ Item {
         anchors.bottomMargin: Tokens.padding.large
         anchors.margins: Tokens.padding.extraLargeIncreased
 
-        playing: Players.active?.isPlaying ?? false
+        playing: root.enabled && root.visible && (Players.active?.isPlaying ?? false)
         speed: Audio.beatTracker.bpm / Config.general.mediaGifSpeedAdjustment
         source: Paths.absolutePath(Config.paths.mediaGif)
         asynchronous: true

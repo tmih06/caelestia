@@ -33,15 +33,24 @@ Item {
     readonly property bool enabled: Config.dashboard.enabled
     readonly property bool expanded: screenState.dashboard && enabled
     readonly property bool mediaDock: compactDock ? compactDock.dockId === "media" : false
+    readonly property bool mediaSelected: (expandedContent.item as Content)?.dashboardTabs[screenState.dashboardTab]?.id === "media"
     property bool morphTargetsReady: false
     property int morphAttempts: 0
     property Item coverTargetItem
     property Item titleTargetItem
+    property Item channelTargetItem
+    property Item albumTargetItem
     property Item timelineTargetItem
+    property Item positionLabelTargetItem
+    property Item durationLabelTargetItem
     property Item waveTargetItem
     property rect artTargetRect
     property rect titleTargetRect
+    property rect channelTargetRect
+    property rect albumTargetRect
     property rect timelineTargetRect
+    property rect positionLabelTargetRect
+    property rect durationLabelTargetRect
     property rect waveTargetRect
     readonly property real nonAnimHeight: (expandedContent.item as Content)?.nonAnimHeight ?? 0
     readonly property real compactHeight: compactDock ? Math.max(36, compactDock.implicitHeight + Tokens.padding.extraSmall * 2) : 36
@@ -50,22 +59,15 @@ Item {
     readonly property real expandedHeight: (expandedContent.item as Content)?.nonAnimHeight || expandedHeightCache || 420
     property real expandedWidthCache: 0
     property real expandedHeightCache: 0
-    readonly property real targetWidth: expanded ? expandedWidth : compactWidth
-    readonly property real targetHeight: expanded ? expandedHeight : compactHeight
 
     property real morph: expanded ? 1 : 0
-    property real animatedWidth: targetWidth
-    property real animatedHeight: targetHeight
+    property real pageWidth: expandedWidth
+    property real pageHeight: expandedHeight
 
-    function lerp(from: real, to: real, t: real): real {
-        return from + (to - from) * t;
-    }
-
-    function itemRect(item: Item): rect {
+    function targetRect(item: Item): rect {
         if (!item)
             return Qt.rect(0, 0, 0, 0);
-        const pos = item.mapToItem(root, 0, 0);
-        return Qt.rect(pos.x, pos.y, item.width, item.height);
+        return expandedContent.item.mediaTargetRect(item);
     }
 
     function selectDockTab(): void {
@@ -82,7 +84,11 @@ Item {
     function resetMorphTargets(): void {
         coverTargetItem = null;
         titleTargetItem = null;
+        channelTargetItem = null;
+        albumTargetItem = null;
         timelineTargetItem = null;
+        positionLabelTargetItem = null;
+        durationLabelTargetItem = null;
         waveTargetItem = null;
         morphAttempts = 0;
         morphTargetsReady = artTargetRect.width > 0 && titleTargetRect.width > 0 && waveTargetRect.width > 0;
@@ -95,53 +101,84 @@ Item {
         const content = expandedContent.item;
         if (!content)
             return;
+        if (!expanded)
+            selectDockTab();
 
         if (!coverTargetItem)
             coverTargetItem = CUtils.findChild(content, "dockMorphCover");
         if (!titleTargetItem)
             titleTargetItem = CUtils.findChild(content, "dockMorphTitle");
+        if (!channelTargetItem)
+            channelTargetItem = CUtils.findChild(content, "dockMorphChannel");
+        if (!albumTargetItem)
+            albumTargetItem = CUtils.findChild(content, "dockMorphAlbum");
         if (!timelineTargetItem)
             timelineTargetItem = CUtils.findChild(content, "dockMorphTimeline");
+        if (!positionLabelTargetItem)
+            positionLabelTargetItem = CUtils.findChild(content, "dockMorphPositionLabel");
+        if (!durationLabelTargetItem)
+            durationLabelTargetItem = CUtils.findChild(content, "dockMorphDurationLabel");
         if (!waveTargetItem)
             waveTargetItem = CUtils.findChild(content, "dockMorphWave");
 
-        if (!coverTargetItem || !titleTargetItem || !waveTargetItem)
+        if (!coverTargetItem || !titleTargetItem || !channelTargetItem || !albumTargetItem || !timelineTargetItem || !waveTargetItem || !positionLabelTargetItem || !durationLabelTargetItem)
             return;
-        if (coverTargetItem.width <= 0 || titleTargetItem.width <= 0 || waveTargetItem.width <= 0)
+        if (coverTargetItem.width <= 0 || titleTargetItem.width <= 0 || channelTargetItem.width <= 0 || albumTargetItem.width <= 0 || timelineTargetItem.width <= 0 || waveTargetItem.width <= 0 || positionLabelTargetItem.width <= 0 || durationLabelTargetItem.width <= 0)
             return;
 
-        artTargetRect = itemRect(coverTargetItem);
-        titleTargetRect = itemRect(titleTargetItem);
-        timelineTargetRect = itemRect(timelineTargetItem);
-        waveTargetRect = itemRect(waveTargetItem);
+        artTargetRect = targetRect(coverTargetItem);
+        titleTargetRect = targetRect(titleTargetItem);
+        channelTargetRect = targetRect(channelTargetItem);
+        albumTargetRect = targetRect(albumTargetItem);
+        timelineTargetRect = targetRect(timelineTargetItem);
+        positionLabelTargetRect = targetRect(positionLabelTargetItem);
+        durationLabelTargetRect = targetRect(durationLabelTargetItem);
+        waveTargetRect = targetRect(waveTargetItem);
         morphTargetsReady = true;
     }
 
-    implicitWidth: animatedWidth
-    implicitHeight: animatedHeight
+    implicitWidth: compactWidth + (pageWidth - compactWidth) * morph
+    implicitHeight: compactHeight + (pageHeight - compactHeight) * morph
     visible: enabled && !fullscreen
     clip: true
 
     Component.onCompleted: compactDock = compact
 
-    onExpandedChanged: {
-        if (expanded) {
+    onMediaDockChanged: {
+        if (mediaDock) {
             resetMorphTargets();
             selectDockTab();
             Qt.callLater(updateMorph);
         }
     }
 
+    onExpandedChanged: {
+        if (expanded) {
+            selectDockTab();
+            Qt.callLater(updateMorph);
+        }
+    }
+
     Behavior on morph {
-        Anim {}
+        Anim {
+            type: Anim.DefaultSpatial
+        }
     }
 
-    Behavior on animatedWidth {
-        Anim {}
+    Behavior on pageWidth {
+        enabled: root.expanded && root.morph === 1
+
+        Anim {
+            type: Anim.DefaultSpatial
+        }
     }
 
-    Behavior on animatedHeight {
-        Anim {}
+    Behavior on pageHeight {
+        enabled: root.expanded && root.morph === 1
+
+        Anim {
+            type: Anim.DefaultSpatial
+        }
     }
 
     Connections {
@@ -180,31 +217,28 @@ Item {
         id: expandedContainer
 
         anchors.top: parent.top
-        anchors.horizontalCenter: parent.horizontalCenter
+        x: root.mediaDock ? 0 : (root.width - width) / 2
         width: root.expandedWidth
         height: root.expandedHeight
 
         opacity: root.morph
-        visible: opacity > 0
+        visible: opacity > 0 || root.mediaDock
         enabled: root.expanded
 
-        Behavior on width {
-            Anim {}
-        }
-
-        Behavior on height {
-            Anim {}
+        transform: Translate {
+            x: root.mediaDock && root.mediaSelected ? -root.Tokens.spacing.large * (1 - root.morph) : 0
+            y: root.mediaDock && root.mediaSelected ? -root.Tokens.spacing.large * (1 - root.morph) : 0
         }
 
         Loader {
             id: expandedContent
 
             anchors.fill: parent
-            active: root.expanded || root.morph > 0.01
+            active: root.expanded || root.morph > 0.01 || root.mediaDock
 
             onItemChanged: {
                 root.resetMorphTargets();
-                if (root.expanded) {
+                if (root.mediaDock) {
                     root.selectDockTab();
                     Qt.callLater(root.updateMorph);
                 }
@@ -213,7 +247,10 @@ Item {
             sourceComponent: Content {
                 screenState: root.screenState
                 facePicker: root.facePicker
-                dockMorph: root.mediaDock ? root.morph : 1
+                sharedMedia: root.mediaDock
+                animatePages: root.expanded && root.morph === 1
+                viewportWidth: root.expanded ? root.width : root.expandedWidth
+                viewportHeight: root.expanded ? root.height : root.expandedHeight
             }
         }
     }
@@ -221,7 +258,7 @@ Item {
     Timer {
         interval: 80
         repeat: true
-        running: root.expanded && root.mediaDock && !root.morphTargetsReady && root.morphAttempts < 50
+        running: root.mediaDock && !root.morphTargetsReady && root.morphAttempts < 50
 
         onTriggered: {
             root.morphAttempts++;
@@ -229,18 +266,38 @@ Item {
         }
     }
 
-    MediaDock {
-        anchors.fill: parent
-        compactWidth: root.compactWidth
-        compactHeight: root.compactHeight
-        active: !root.expanded
-        morph: root.morph
-        targetReady: root.morphTargetsReady
-        artTargetRect: root.artTargetRect
-        titleTargetRect: root.titleTargetRect
-        timelineTargetRect: root.timelineTargetRect
-        waveTargetRect: root.waveTargetRect
-        opacity: root.mediaDock ? (root.morph < 0.85 ? 1 : Math.max(0, (1 - root.morph) / 0.15)) : 0
-        visible: opacity > 0
+    Item {
+        id: mediaClip
+
+        readonly property var content: expandedContent.item
+        readonly property rect viewport: content?.pageViewport ?? Qt.rect(0, 0, 0, 0)
+
+        x: viewport.x * root.morph
+        y: viewport.y * root.morph
+        width: Math.max(0, root.width - x - Math.max(0, (content?.width ?? root.width) - viewport.x - viewport.width) * root.morph)
+        height: Math.max(0, root.height - y - Math.max(0, (content?.height ?? root.height) - viewport.y - viewport.height) * root.morph)
+        visible: root.mediaDock
+        clip: true
+
+        MediaDock {
+            x: -mediaClip.x + (mediaClip.content?.mediaPageOffset ?? 0) * root.morph
+            y: -mediaClip.y
+            width: root.width
+            height: root.height
+            compactWidth: root.compactWidth
+            compactHeight: root.compactHeight
+            active: !root.expanded
+            morph: root.morph
+            targetReady: root.morphTargetsReady
+            artTargetRect: root.artTargetRect
+            titleTargetRect: root.titleTargetRect
+            channelTargetRect: root.channelTargetRect
+            albumTargetRect: root.albumTargetRect
+            timelineTargetRect: root.timelineTargetRect
+            positionLabelTargetRect: root.positionLabelTargetRect
+            durationLabelTargetRect: root.durationLabelTargetRect
+            waveTargetRect: root.waveTargetRect
+            enabled: root.mediaSelected || root.morph < 0.05
+        }
     }
 }

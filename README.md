@@ -158,6 +158,33 @@ caelestia shell mpris getActive trackTitle
 
 You can view the list of available IPC commands by running `caelestia shell -s`.
 
+The compact media dock and expanded Media tab share circular artwork, track metadata,
+and the playback timeline. Metadata and time labels move with the timeline during
+expansion and collapse; shared visuals travel with the Media page and are clipped
+to its viewport. Long titles scroll in both the dock and expanded drawer.
+
+The dock waveform fades and scales with playback and hover changes, keeping its
+live sampling active through fade-out and stopping once hidden. The dock keeps a
+flat timebar while the expanded drawer uses a waving slider. Known-duration tracks
+are seekable; unknown-duration tracks retain elapsed time and a muted, non-seekable
+wave instead of hiding the timeline. The handle morphs directly into a 4px dock dot
+without a secondary resize animation.
+
+Expansion and collapse use one expressive spring clock for panel dimensions and
+shared media visuals. Text scales at a fixed font size instead of rerasterizing at
+each animation step. Tab switching translates naturally sized pages with spring
+easing rather than resizing their layouts; drag/swipe and horizontal scrolling are
+supported, and the tab indicator follows the same pager position.
+
+Loaded pages are cached and offscreen rendering is culled with zero opacity so Qt
+positioners retain valid dimensions. Inactive sensor polling, spectrum updates,
+artwork rotation, and graph animation are paused. The shared circular artwork uses
+a layout target rather than a second hidden, rotating image.
+
+Calendar dates and weekday headers share seven equal-width columns and matching
+spacing. Its six-row height comes from font metrics rather than assigned cell
+heights, keeping alignment and the Dashboard's natural size stable across visits.
+
 ### PFP/Wallpapers
 
 The profile picture for the dashboard is read from the file `~/.face`. You can set it by clicking it in the dashboard,

@@ -11,13 +11,15 @@ Item {
     id: root
 
     required property ScreenState screenState
-    property real dockMorph: 1
+    property bool sharedMedia: false
+    property bool animateBackground: true
 
     implicitWidth: Tokens.sizes.dashboard.mediaTabWidth
     implicitHeight: Tokens.sizes.dashboard.mediaTabHeight
 
     BackgroundShapes {
         anchors.fill: parent
+        animating: root.animateBackground
     }
 
     RowLayout {
@@ -28,7 +30,8 @@ Item {
         CoverVisualiser {
             Layout.fillHeight: true
             implicitWidth: Tokens.sizes.dashboard.mediaSectionWidth
-            dockMorph: root.dockMorph
+            sharedMedia: root.sharedMedia
+            animating: root.animateBackground && (Players.active?.isPlaying ?? false)
         }
 
         Item {
@@ -141,7 +144,7 @@ Item {
 
                     Details {
                         Layout.fillWidth: true
-                        dockMorph: root.dockMorph
+                        sharedMedia: root.sharedMedia
                     }
 
                     LyricsAndSelector {

@@ -161,10 +161,12 @@ CustomMouseArea {
 
             Layout.fillWidth: true
             locale: grid.locale
+            spacing: grid.spacing
 
             delegate: StyledText {
                 required property var model
 
+                width: Math.max(0, (daysRow.availableWidth - daysRow.spacing * 6) / 7)
                 horizontalAlignment: Text.AlignHCenter
                 text: model.shortName
                 font: Tokens.font.body.builders.small.weight(Font.Medium).build()
@@ -188,6 +190,8 @@ CustomMouseArea {
                 year: root.currYear
 
                 anchors.fill: parent
+                // MonthGrid's default size feeds assigned cell heights back into the layout.
+                implicitHeight: 6 * (Math.ceil(dayMetrics.height) + Tokens.padding.small) + 5 * spacing
 
                 spacing: 3
                 locale: Qt.locale()
@@ -197,8 +201,10 @@ CustomMouseArea {
 
                     required property var model
 
+                    width: Math.max(0, (grid.availableWidth - grid.spacing * 6) / 7)
+                    height: Math.max(0, (grid.availableHeight - grid.spacing * 5) / 6)
                     implicitWidth: implicitHeight
-                    implicitHeight: text.implicitHeight + Tokens.padding.small
+                    implicitHeight: Math.ceil(dayMetrics.height) + Tokens.padding.small
 
                     StyledText {
                         id: text
@@ -217,6 +223,12 @@ CustomMouseArea {
                         opacity: dayItem.model.today || dayItem.model.month === grid.month ? 1 : 0.4
                         font: Tokens.font.body.small
                     }
+                }
+
+                FontMetrics {
+                    id: dayMetrics
+
+                    font: Tokens.font.body.small
                 }
             }
 

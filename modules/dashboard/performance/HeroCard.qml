@@ -104,7 +104,7 @@ StyledRect {
             value: root.temperature / 100
             implicitHeight: Tokens.padding.small
             fgColour: root.accent
-            indeterminate: isNaN(root.usage) || isNaN(root.temperature)
+            indeterminate: root.enabled && root.visible && (isNaN(root.usage) || isNaN(root.temperature))
         }
     }
 

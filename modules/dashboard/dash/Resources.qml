@@ -15,15 +15,15 @@ Item {
     implicitWidth: layout.implicitWidth + layout.anchors.margins * 2
 
     ServiceRef {
-        service: Cpu
+        service: root.enabled && root.visible ? Cpu : null
     }
 
     ServiceRef {
-        service: Memory
+        service: root.enabled && root.visible ? Memory : null
     }
 
     ServiceRef {
-        service: Storage
+        service: root.enabled && root.visible ? Storage : null
     }
 
     ColumnLayout {

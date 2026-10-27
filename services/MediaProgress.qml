@@ -38,7 +38,7 @@ Singleton {
 
     function clampPosition(value: real): real {
         const position = Number.isFinite(value) ? value : 0;
-        return Math.max(0, Math.min(root.length, position));
+        return root.length > 0 ? Math.max(0, Math.min(root.length, position)) : Math.max(0, position);
     }
 
     function updateCache(): void {

@@ -13,10 +13,18 @@ Slider {
 
     property bool wavy
     property bool animateWave
+    property bool indeterminate: false
     property real waveFrequency: 6
     property int waveDuration: 1000
     property int radius: Tokens.rounding.medium
     property bool interactionOnMove: true
+    property bool animateFill: true
+    property bool animateHandle: true
+    property real handleHeight: {
+        const t = CUtils.clamp((height - 12) / 16, 0, 1);
+        const lerp = (a, b) => a + (b - a) * t;
+        return height * (dragging ? lerp(3.5, 1.5) : lerp(3, 1.2));
+    }
     readonly property bool dragging: mouse.pressed
 
     property color fgColour: enabled ? Colours.palette.m3primary : Qt.alpha(Colours.palette.m3onSurface, 0.38)
@@ -45,6 +53,7 @@ Slider {
 
             implicitHeight: parent.height * (parent.height <= 12 ? opacity : Math.min(opacity * 2, 1))
             opacity: Math.min(width, 12) / 12
+            visible: !(root.indeterminate && root.wavy)
 
             radius: root.radius
             topLeftRadius: Tokens.rounding.extraSmall / 2
@@ -60,6 +69,7 @@ Slider {
             implicitWidth: implicitHeight
             implicitHeight: 4 * remaining.opacity
             opacity: remaining.opacity
+            visible: !root.indeterminate
 
             radius: Tokens.rounding.full
             color: root.fgColour
@@ -68,21 +78,19 @@ Slider {
         StyledRect {
             id: handle
 
-            anchors.left: filled.right
+            anchors.left: root.indeterminate && root.wavy ? parent.left : filled.right
             anchors.verticalCenter: parent.verticalCenter
             anchors.leftMargin: Tokens.spacing.extraSmall
 
             implicitWidth: 4
-            implicitHeight: {
-                const t = CUtils.clamp((parent.height - 12) / 16, 0, 1);
-                const lerp = (a, b) => a + (b - a) * t;
-                return parent.height * (mouse.pressed ? lerp(3.5, 1.5) : lerp(3, 1.2));
-            }
+            implicitHeight: root.handleHeight
 
             radius: Tokens.rounding.full
             color: root.fgColour
 
             Behavior on implicitHeight {
+                enabled: root.animateHandle
+
                 Anim {
                     type: Anim.FastSpatial
                 }
@@ -121,9 +129,9 @@ Slider {
                 frequency: root.waveFrequency
                 startX: x
                 fullLength: root.width - handle.implicitWidth - handle.anchors.leftMargin
-                color: root.fgColour
+                color: root.indeterminate ? root.bgColour : root.fgColour
 
-                implicitWidth: root.filledWidth
+                implicitWidth: root.indeterminate ? root.width : root.filledWidth
                 implicitHeight: lineWidth * amplitudeMultiplier * 2 + lineWidth
 
                 Anim on waveProgress {
@@ -167,7 +175,6 @@ Slider {
         implicitHeight: handle.implicitHeight
 
         onPressed: e => {
-            widthBehavior.enabled = false;
             pressStartX = e.x;
             pressStartPos = root.visualPosition;
         }
@@ -180,13 +187,12 @@ Slider {
             const clickPos = e.x / width;
             const finalPos = mouse.dragMovement !== 0 ? posBinding.value : CUtils.clamp(clickPos, 0, 1);
             root.interaction(finalPos);
-            widthBehavior.enabled = true;
             dragMovement = 0;
         }
     }
 
     Behavior on filledWidth {
-        id: widthBehavior
+        enabled: root.animateFill && !root.dragging
 
         Anim {}
     }

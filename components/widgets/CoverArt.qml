@@ -16,6 +16,7 @@ Item {
     readonly property alias shape: shape
 
     property bool hadPrevious
+    property bool animated: true
     property color fallbackColour: Colours.layer(Colours.palette.m3surfaceContainerHighest, 2)
 
     // Slight glow to separate from bg
@@ -47,7 +48,7 @@ Item {
 
             Anim on rotation {
                 running: true
-                paused: !Players.active?.isPlaying
+                paused: !root.animated || !root.enabled || !root.visible || root.opacity === 0 || !Players.active?.isPlaying
                 from: 360
                 to: 0
                 duration: 23500

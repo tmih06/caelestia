@@ -11,7 +11,7 @@ import qs.services
 ColumnLayout {
     id: root
 
-    property real dockMorph: 1
+    property bool sharedMedia: false
 
     readonly property bool hasUnknownLength: !MediaProgress.hasProgress || MediaProgress.length > 2147483647
 
@@ -44,30 +44,34 @@ ColumnLayout {
 
         objectName: "dockMorphTitle"
 
-        opacity: dockMorph > 0.85 ? Math.min(1, (dockMorph - 0.85) / 0.15) : 0
+        opacity: root.sharedMedia ? 0 : 1
         Layout.fillWidth: true
         text: Players.active?.trackTitle ?? ""
         font: Tokens.font.title.large
         elide: Text.ElideRight
-        animate: true
+        animate: !root.sharedMedia
     }
 
     StyledText {
+        objectName: "dockMorphChannel"
+        opacity: root.sharedMedia ? 0 : 1
         Layout.fillWidth: true
         text: Players.active?.trackArtist || Tr.tr("Unknown artist")
         color: Colours.palette.m3onSurfaceVariant
         font: Tokens.font.title.medium
         elide: Text.ElideRight
-        animate: true
+        animate: !root.sharedMedia
     }
 
     StyledText {
+        objectName: "dockMorphAlbum"
+        opacity: root.sharedMedia ? 0 : 1
         Layout.fillWidth: true
         text: Players.active?.trackAlbum || Tr.tr("Unknown album")
         color: Colours.palette.m3secondary
         font: Tokens.font.title.medium
         elide: Text.ElideRight
-        animate: true
+        animate: !root.sharedMedia
     }
 
     RowLayout {
@@ -85,6 +89,9 @@ ColumnLayout {
         StyledText {
             id: positionLabel
 
+            objectName: "dockMorphPositionLabel"
+            opacity: root.sharedMedia ? 0 : 1
+
             Layout.preferredWidth: timeMetrics.width
             text: root.lengthStr(MediaProgress.position)
             color: Colours.palette.m3onSurfaceVariant
@@ -97,12 +104,12 @@ ColumnLayout {
 
             objectName: "dockMorphTimeline"
 
-            opacity: root.dockMorph > 0.85 ? Math.min(1, (root.dockMorph - 0.85) / 0.15) : 0
+            opacity: root.sharedMedia ? 0 : 1
             Layout.fillWidth: true
             value: MediaProgress.progress
             enabled: (Players.active?.canSeek ?? false) && !root.hasUnknownLength
             wavy: true
-            animateWave: MediaProgress.playing
+            animateWave: !root.sharedMedia && root.enabled && root.visible && MediaProgress.playing
             waveFrequency: 5
             waveDuration: 2000
             interactionOnMove: false
@@ -117,6 +124,8 @@ ColumnLayout {
         }
 
         StyledText {
+            objectName: "dockMorphDurationLabel"
+            opacity: root.sharedMedia ? 0 : 1
             Layout.preferredWidth: timeMetrics.width
             text: root.hasUnknownLength ? "--:--" : root.lengthStr(MediaProgress.length)
             color: Colours.palette.m3onSurfaceVariant
