@@ -255,12 +255,21 @@ CustomMouseArea {
     Dashboard.Wrapper {
         id: dashboard
 
+        // Keep the idle clock above the edge; the border remains its hover target.
+        property real idleReveal: expanded || (compactDock?.dockId ?? "clock") !== "clock" || (root.containsMouse && root.inTopPanel(dashboard, root.mouseX, root.mouseY)) ? 1 : 0
+
         screenState: root.screenState
         fullscreen: root.fullscreen
 
         anchors.top: parent.top
-        anchors.topMargin: root.borderThickness
+        anchors.topMargin: root.borderThickness - compactHeight * (1 - idleReveal)
         anchors.horizontalCenter: parent.horizontalCenter
+
+        Behavior on idleReveal {
+            Anim {
+                type: Anim.FastSpatial
+            }
+        }
     }
 
     // Monitor individual visibility changes

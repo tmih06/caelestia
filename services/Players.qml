@@ -13,11 +13,29 @@ Singleton {
     id: root
 
     readonly property list<MprisPlayer> list: Mpris.players.values
-    readonly property MprisPlayer active: props.manualActive ?? list.find(p => getIdentity(p) === GlobalConfig.services.defaultPlayer) ?? list[0] ?? null
+    // Discovery stays complete for settings; only admitted sessions drive media UI.
+    readonly property list<MprisPlayer> available: sessions.instances.filter(session => session.available).map(session => session.modelData)
+    readonly property MprisPlayer active: available.includes(props.manualActive) ? props.manualActive : available.find(p => getIdentity(p) === GlobalConfig.services.defaultPlayer) ?? available[0] ?? null
     property alias manualActive: props.manualActive
 
     // Dedup key for progressive metadata (e.g. mpv-mpris/yt-dlp player fills title then artist later).
     property string lastNowPlayingKey: ""
+    property bool initialized: false
+    readonly property var acceptedTracks: JSON.parse(props.acceptedSessions)
+
+    function rememberTrack(player: MprisPlayer, track: string): void {
+        const name = player.dbusName;
+        const previous = root.acceptedTracks.find(entry => entry.name === name);
+        if ((previous?.track ?? "") === track)
+            return;
+        const entries = root.acceptedTracks.filter(entry => entry.name !== name && root.list.some(p => p.dbusName === entry.name));
+        if (track)
+            entries.push({
+                name,
+                track
+            });
+        props.acceptedSessions = JSON.stringify(entries);
+    }
 
     function getIdentity(player: MprisPlayer): string {
         if (!player)
@@ -66,6 +84,10 @@ Singleton {
     }
 
     onActiveChanged: lastNowPlayingKey = ""
+    onListChanged: {
+        if (initialized)
+            props.acceptedSessions = JSON.stringify(root.acceptedTracks.filter(entry => root.list.some(player => player.dbusName === entry.name)));
+    }
 
     Connections {
         function onPostTrackChanged(): void {
@@ -87,8 +109,47 @@ Singleton {
         id: props
 
         property MprisPlayer manualActive
+        // Persist plain data rather than JavaScript objects owned by the old engine.
+        property string acceptedSessions: "[]"
 
         reloadableId: "players"
+        onLoaded: root.initialized = true
+    }
+
+    Variants {
+        id: sessions
+
+        model: root.list
+
+        QtObject {
+            id: session
+
+            required property MprisPlayer modelData
+            // A semantic key also survives QML engine reloads.
+            readonly property string track: `${modelData.metadata["mpris:trackid"] ?? ""}\0${modelData.metadata["xesam:url"] ?? ""}\0${modelData.trackTitle}`
+            readonly property string acceptedTrack: root.acceptedTracks.find(entry => entry.name === modelData.dbusName)?.track ?? ""
+            readonly property bool available: modelData.playbackState !== MprisPlaybackState.Stopped && track === acceptedTrack
+
+            readonly property Connections listener: Connections {
+                function onPlaybackStateChanged(): void {
+                    Qt.callLater(session.update);
+                }
+
+                target: session.modelData
+            }
+
+            function update(): void {
+                // Metadata can precede playback state in the same D-Bus update.
+                // Admit the final playing track, not a paused preview replacement.
+                if (modelData.playbackState === MprisPlaybackState.Playing)
+                    root.rememberTrack(modelData, track);
+                else if (modelData.playbackState === MprisPlaybackState.Stopped || track !== acceptedTrack)
+                    root.rememberTrack(modelData, "");
+            }
+
+            onTrackChanged: Qt.callLater(update)
+            Component.onCompleted: Qt.callLater(update)
+        }
     }
 
     // qmllint disable unresolved-type

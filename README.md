@@ -169,6 +169,15 @@ and the playback timeline. Metadata and time labels move with the timeline durin
 expansion and collapse; shared visuals travel with the Media page and are clipped
 to its viewport. Long titles scroll in both the dock and expanded drawer.
 
+With no media session or recording, the compact dock retracts into the top edge
+and reappears on hover. Media, recording indicators, and open drawers remain visible.
+
+Media sessions appear after a player reports playback. Pausing the same track
+keeps it visible; stopping, disconnecting, or replacing the track while paused
+clears it. An already-paused player at shell startup remains hidden until played.
+Browser previews reported as paused metadata cannot take over; a browser that
+reports a preview as genuine playback is indistinguishable through MPRIS alone.
+
 The dock waveform fades and scales with playback and hover changes, keeping its
 live sampling active through fade-out and stopping once hidden. The dock keeps a
 flat timebar while the expanded drawer uses a waving slider. Known-duration tracks

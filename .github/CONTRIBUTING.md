@@ -154,6 +154,11 @@ Keep the intended local native-import path explicit.
   seeks, and duration caching. Some MPRIS players report current position as
   length when duration is unsupported. Preserve unknown-duration elapsed time
   and the non-seekable state instead of inventing a total duration.
+- **Separate discovery from active sessions.** `Players.list` includes all MPRIS
+  players for settings and diagnostics; `Players.available` contains admitted
+  sessions for the selector. `Players.active` excludes stopped players and
+  unplayed paused replacements. Preserve same-track pause and hot-reload state;
+  do not infer browser playback intent from titles or URLs.
 - **Give calendar delegates cell geometry.** Weekdays and dates use seven
   matching column widths and spacing. The six-row natural height comes from
   font metrics, not the assigned cell height; feeding assigned size back into
@@ -227,6 +232,13 @@ Use deterministic regression tests where the real behavior has a suitable seam.
 Throwaway probes are useful for boundaries and resource lifetimes; remove them
 afterward. An isolated `FloatingWindow` proves its own path, not the actual drawer
 host's sizing, input regions, clipping, shadows, or frame timing.
+
+For media session lifecycle changes, run `python3 tests/media/check.py`.
+It exercises the real `Players` and `MediaProgress` services against synthetic
+MPRIS players on a private D-Bus session, including pause, stop, metadata
+replacement, selection, reload, and disconnect/reconnect. It requires a built
+plugin in `build/qml`, Quickshell, a Wayland session, `dbus-run-session`,
+`python-dbus`, and PyGObject. It does not change real playback or user settings.
 
 Choose the relevant rows; report which were actually exercised:
 

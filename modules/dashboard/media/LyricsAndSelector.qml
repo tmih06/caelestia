@@ -50,7 +50,7 @@ Item {
             Layout.alignment: Qt.AlignHCenter
 
             type: SplitButton.Tonal
-            disabled: !Players.list.length
+            disabled: !Players.available.length
             active: menuItems.find(m => m.modelData === Players.active) ?? menuItems[0] ?? null
             menu.onItemSelected: item => Players.manualActive = (item as PlayerItem).modelData
 
@@ -68,7 +68,7 @@ Item {
             Variants {
                 id: playerList
 
-                model: Players.list
+                model: Players.available
 
                 PlayerItem {}
             }
