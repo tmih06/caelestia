@@ -15,6 +15,8 @@ StyledRect {
     readonly property color accent: Colours.palette.m3secondary
     readonly property real percentage: Storage.primaryDisk?.perc ?? 0
 
+    property bool active: true
+
     color: Colours.tPalette.m3surfaceContainer
     radius: Tokens.rounding.extraExtraLarge
 
@@ -22,7 +24,7 @@ StyledRect {
     implicitHeight: layout.implicitHeight + Tokens.padding.large * 2
 
     ServiceRef {
-        service: root.enabled && root.visible ? Storage : null
+        service: root.active && root.enabled && root.visible ? Storage : null
     }
 
     ColumnLayout {

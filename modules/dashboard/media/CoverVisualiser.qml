@@ -46,7 +46,7 @@ Item {
     }
 
     ServiceRef {
-        service: root.enabled && root.visible && (Players.active?.isPlaying ?? false) ? Audio.cava : null
+        service: root.animating && root.enabled && root.visible && (Players.active?.isPlaying ?? false) ? Audio.cava : null
     }
 
     Shape {

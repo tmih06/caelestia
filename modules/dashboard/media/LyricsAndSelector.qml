@@ -9,6 +9,10 @@ import qs.components.controls
 import qs.services
 
 Item {
+    id: root
+
+    property bool pageActive: true
+
     ColumnLayout {
         id: layout
 
@@ -39,6 +43,7 @@ Item {
         LyricList {
             Layout.fillWidth: true
             Layout.fillHeight: true
+            pageActive: root.pageActive
         }
 
         SplitButton {

@@ -30,6 +30,9 @@ namespace {
 
 constexpr qint64 k_maxBytes = 512ll * 1024 * 1024;
 constexpr auto k_suffix = ".ktx"_L1;
+// Lookups are frequent (every resize/refresh) while a fresh timestamp is only needed for LRU
+// ordering, so avoid a SQLite write for keys touched recently.
+constexpr qint64 k_touchInterval = 300;
 
 qint64 now() {
     return QDateTime::currentSecsSinceEpoch();
@@ -70,10 +73,12 @@ void ImageCacheWorker::open() {
 }
 
 void ImageCacheWorker::touch(const QString& key) {
+    const qint64 timestamp = now();
     QSqlQuery query(m_db);
-    query.prepare(u"UPDATE entries SET last_used = :now WHERE key = :key"_s);
-    query.bindValue(u":now"_s, now());
+    query.prepare(u"UPDATE entries SET last_used = :now WHERE key = :key AND last_used < :stale"_s);
+    query.bindValue(u":now"_s, timestamp);
     query.bindValue(u":key"_s, key);
+    query.bindValue(u":stale"_s, timestamp - k_touchInterval);
     query.exec();
 }
 

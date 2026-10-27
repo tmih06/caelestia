@@ -62,7 +62,7 @@ Singleton {
 
     onMonitorsChanged: {
         ddcMonitors = [];
-        ddcProc.running = true;
+        ddcProbe.running = true;
     }
 
     Variants {
@@ -78,6 +78,21 @@ Singleton {
         command: ["sh", "-c", "asdbctl get"] // To avoid warnings if asdbctl is not installed
         stdout: StdioCollector {
             onStreamFinished: root.appleDisplayPresent = text.trim().length > 0
+        }
+    }
+
+    // DDC/CI exists only on external connectors. `ddcutil detect` spends most
+    // of a second probing I2C buses on every startup, which is wasted on
+    // laptop-only machines, so ask sysfs whether a connected external display
+    // exists first.
+    Process {
+        id: ddcProbe
+
+        // exit 0 = at least one connected connector that is not internal
+        command: ["sh", "-c", 'for f in /sys/class/drm/card*-*/status; do IFS= read -r status < "$f" 2>/dev/null || continue; [ "$status" = connected ] || continue; case "$f" in */card*-eDP-*|*/card*-LVDS-*|*/card*-DSI-*) continue ;; esac; exit 0; done; exit 1']
+        onExited: code => {
+            if (code === 0)
+                ddcProc.running = true;
         }
     }
 
@@ -179,9 +194,17 @@ Singleton {
                     if (monitor.isAppleDisplay) {
                         const val = parseInt(text.trim());
                         monitor.brightness = val / 101;
-                    } else {
+                    } else if (monitor.isDdc) {
                         const [, , , cur, max] = text.split(" ");
                         monitor.brightness = parseInt(cur) / parseInt(max);
+                    } else {
+                        // brightnessctl -m prints device,class,current,percent,max.
+                        // Its integer percentage loses precision at low brightness.
+                        const fields = text.trim().split(",");
+                        const current = Number(fields[2]);
+                        const maximum = Number(fields[4]);
+                        if (maximum > 0 && isFinite(current))
+                            monitor.brightness = current / maximum;
                     }
                 }
             }
@@ -227,7 +250,8 @@ Singleton {
             else if (isDdc)
                 initProc.command = ["ddcutil", "-b", busNum, "getvcp", "10", "--brief"];
             else
-                initProc.command = ["sh", "-c", "echo a b c $(brightnessctl g) $(brightnessctl m)"];
+                // One process instead of a shell plus two brightnessctl forks.
+                initProc.command = ["brightnessctl", "-m"];
 
             initProc.running = true;
         }

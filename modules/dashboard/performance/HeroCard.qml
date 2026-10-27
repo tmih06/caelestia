@@ -17,6 +17,7 @@ StyledRect {
     required property color accent
     required property real usage
     required property real temperature
+    property bool active: true
 
     color: Colours.tPalette.m3surfaceContainer
     radius: Tokens.rounding.extraLarge
@@ -104,7 +105,7 @@ StyledRect {
             value: root.temperature / 100
             implicitHeight: Tokens.padding.small
             fgColour: root.accent
-            indeterminate: root.enabled && root.visible && (isNaN(root.usage) || isNaN(root.temperature))
+            indeterminate: root.active && root.enabled && root.visible && (isNaN(root.usage) || isNaN(root.temperature))
         }
     }
 

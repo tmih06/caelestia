@@ -35,7 +35,7 @@ QtObject {
     readonly property Timer timeStrTimer: Timer {
         running: !notif.closed
         repeat: true
-        interval: 5000
+        interval: 60000
         onTriggered: notif.updateTimeStr()
     }
 
@@ -181,23 +181,16 @@ QtObject {
     }
 
     function updateTimeStr(): void {
-        const diff = Date.now() - time.getTime();
-        const m = Math.floor(diff / 60000);
+        const age = Date.now() - time.getTime();
+        const m = Math.floor(age / 60000);
         ageMins = m;
 
-        if (m < 1) {
-            timeStrTimer.interval = 5000;
-        } else {
-            const h = Math.floor(m / 60);
-            const d = Math.floor(h / 24);
-
-            if (d > 0)
-                timeStrTimer.interval = 3600000;
-            else if (h > 0)
-                timeStrTimer.interval = 300000;
-            else
-                timeStrTimer.interval = m < 10 ? 30000 : 60000;
-        }
+        // The label only changes on whole minute/hour boundaries, so wake up
+        // exactly on the next one instead of polling every few seconds. Hours
+        // are the coarsest step so a clock jump (e.g. resume) cannot leave an
+        // old notification stale for a whole day.
+        const unit = m < 60 ? 60000 : 3600000;
+        timeStrTimer.interval = unit - (age % unit);
     }
 
     function maybeTriggerDummyImageLoader(): void {

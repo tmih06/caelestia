@@ -26,15 +26,12 @@ Singleton {
     readonly property real progress: hasProgress ? Math.max(0, Math.min(1, displayPosition / length)) : 0
     readonly property real position: displayPosition
     property real displayPosition: 0
-    property string trackKey: ""
+    // Track the identity/length the timeline was reset for as separate scalars
+    // instead of rebuilding a composite key string on every tick.
+    property string syncedIdentity: ""
+    property real syncedLength: -1
     property real lastTick: 0
     property real seekGuardUntil: 0
-
-    function currentTrackKey(): string {
-        if (!player)
-            return "";
-        return `${player.uniqueId}\0${player.trackTitle}\0${player.trackArtist}\0${length}`;
-    }
 
     function clampPosition(value: real): real {
         const position = Number.isFinite(value) ? value : 0;
@@ -55,15 +52,16 @@ Singleton {
 
     function sync(forceReset: bool): void {
         if (!player) {
-            trackKey = "";
+            syncedIdentity = "";
+            syncedLength = -1;
             displayPosition = 0;
             return;
         }
 
         updateCache();
-        const key = currentTrackKey();
-        if (forceReset || key !== trackKey) {
-            trackKey = key;
+        if (forceReset || identity !== syncedIdentity || length !== syncedLength) {
+            syncedIdentity = identity;
+            syncedLength = length;
             displayPosition = clampPosition(player.position ?? 0);
             lastTick = playing ? Date.now() : 0;
             seekGuardUntil = 0;
@@ -105,7 +103,8 @@ Singleton {
     onPlayerChanged: {
         cachedIdentity = "";
         cachedLength = 0;
-        trackKey = "";
+        syncedIdentity = "";
+        syncedLength = -1;
         displayPosition = 0;
         sync(true);
     }
@@ -117,7 +116,10 @@ Singleton {
     onLengthChanged: sync(true)
 
     Timer {
-        interval: 200
+        // Interpolate at display rate only while playback advances the
+        // timeline; while paused a slower poll still picks up external seeks
+        // without waking up five times a second for a static position.
+        interval: root.playing ? 200 : 1000
         repeat: true
         running: !!root.player
 

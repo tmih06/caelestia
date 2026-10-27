@@ -9,21 +9,23 @@ import qs.services
 Item {
     id: root
 
+    property bool active: true // Dashboard is open on this tab
+
     anchors.top: parent.top
     anchors.bottom: parent.bottom
 
     implicitWidth: layout.implicitWidth + layout.anchors.margins * 2
 
     ServiceRef {
-        service: root.enabled && root.visible ? Cpu : null
+        service: root.active && root.enabled && root.visible ? Cpu : null
     }
 
     ServiceRef {
-        service: root.enabled && root.visible ? Memory : null
+        service: root.active && root.enabled && root.visible ? Memory : null
     }
 
     ServiceRef {
-        service: root.enabled && root.visible ? Storage : null
+        service: root.active && root.enabled && root.visible ? Storage : null
     }
 
     ColumnLayout {

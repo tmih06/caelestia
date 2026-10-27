@@ -27,30 +27,13 @@ MaterialShape {
     property real dampingRatio: 0.6
     property real visibilityThreshold: 0.075
 
-    readonly property real springDuration: {
-        const wn = Math.sqrt(stiffness);
-        const r = -dampingRatio * wn;
-        const c = 1 / Math.sqrt(1 - dampingRatio * dampingRatio);
-        return Math.log(visibilityThreshold / c) / r;
-    }
-    readonly property real springMaxVelocity: {
-        const wn = Math.sqrt(stiffness);
-        const factor = Math.exp(-z * Math.acos(z) / Math.sqrt(1 - z * z));
-        return wn * factor;
-    }
+    readonly property bool animationActive: animated && visible && enabled && opacity > 0
+    readonly property real naturalFrequency: Math.sqrt(stiffness)
+    readonly property real decayRate: dampingRatio * naturalFrequency
+    readonly property real dampedFrequency: naturalFrequency * Math.sqrt(1 - dampingRatio * dampingRatio)
+    readonly property real springDuration: Math.log(visibilityThreshold * Math.sqrt(1 - dampingRatio * dampingRatio)) / -decayRate
+    readonly property real springMaxVelocity: naturalFrequency * Math.exp(-dampingRatio * Math.acos(dampingRatio) / Math.sqrt(1 - dampingRatio * dampingRatio))
     property bool springSettled: true
-
-    function spring(t: real): var {
-        const wn = Math.sqrt(stiffness);
-        const za = dampingRatio * wn;
-
-        const wd = wn * Math.sqrt(1 - dampingRatio * dampingRatio);
-        const r = za / wd;
-        const pos = 1 - Math.exp(-za * t) * (Math.cos(wd * t) + r * Math.sin(wd * t));
-        const vel = Math.exp(-za * t) * (wn * wn / wd) * Math.sin(wd * t);
-
-        return [pos, vel];
-    }
 
     implicitSize: 38
     color: Colours.palette.m3primary
@@ -61,14 +44,17 @@ MaterialShape {
     }
 
     FrameAnimation {
-        running: root.animated && !root.springSettled
+        running: root.animationActive && !root.springSettled
         onTriggered: {
             const t = timer.elapsed();
 
             if (t >= root.springDuration) {
                 root.springSettled = true;
             } else {
-                const [pos, vel] = root.spring(t);
+                const angle = root.dampedFrequency * t;
+                const decay = Math.exp(-root.decayRate * t);
+                const pos = 1 - decay * (Math.cos(angle) + root.decayRate / root.dampedFrequency * Math.sin(angle));
+                const vel = decay * root.stiffness / root.dampedFrequency * Math.sin(angle);
                 root.morphProgress = Math.min(1, pos); // Overshooting the morph looks weird
                 root.thisLRotation = pos * root.morphAnimRotation;
                 root.scale = 1 + vel * root.morphScale / root.springMaxVelocity;
@@ -80,7 +66,7 @@ MaterialShape {
         interval: 650
         repeat: true
         triggeredOnStart: true
-        running: root.animated
+        running: root.animationActive
         onTriggered: {
             root.beginBatchUpdate();
             root.fromShape = root.toShape;
@@ -103,6 +89,7 @@ MaterialShape {
         id: rotateAnim
 
         running: root.animated
+        paused: running && !root.animationActive
         from: 0
         to: 360
         easing.type: Easing.Linear

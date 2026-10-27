@@ -191,11 +191,11 @@ void BlobShape::updatePolish() {
     updatePaddedBounds(pad);
 
     // Tracks shape pointers parallel to m_cachedRects for pairwise exclusion lookups
-    QVector<BlobShape*> rectShapes;
-    collectNearbyRects(pad, rectShapes);
-    computeExcludeMasks(rectShapes);
+    m_rectShapesScratch.clear();
+    collectNearbyRects(pad, m_rectShapesScratch);
+    computeExcludeMasks(m_rectShapesScratch);
     cacheInvertedRect(pad);
-    applyCornerFill(pad, rectShapes);
+    applyCornerFill(pad, m_rectShapesScratch);
 }
 
 QRectF BlobShape::localPaddedRect(float pad) const {

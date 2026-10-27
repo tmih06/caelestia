@@ -81,6 +81,7 @@ protected:
     float m_cachedPaddedH = 0;
     QRectF m_localPaddedRect;
     QVector<BlobRectData> m_cachedRects;
+    QVector<BlobShape*> m_rectShapesScratch; // Reused per polish to avoid reallocating the neighbour list
     int m_cachedMyIndex = -2;
     float m_pendingDx = 0;
     float m_pendingDy = 0;

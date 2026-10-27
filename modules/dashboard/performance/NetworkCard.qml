@@ -10,6 +10,8 @@ import qs.services
 StyledRect {
     id: root
 
+    property bool active: true
+
     color: Colours.tPalette.m3surfaceContainer
     radius: Tokens.rounding.extraLarge
 
@@ -17,7 +19,7 @@ StyledRect {
     implicitHeight: Tokens.sizes.dashboard.perfNetworkCardHeight
 
     ServiceRef {
-        service: root.enabled && root.visible ? NetworkUsage : null
+        service: root.active && root.enabled && root.visible ? NetworkUsage : null
     }
 
     ColumnLayout {
@@ -74,7 +76,7 @@ StyledRect {
                     }
 
                     target: NetworkUsage.downloadBuffer
-                    enabled: root.enabled && root.visible
+                    enabled: root.active && root.enabled && root.visible
                 }
 
                 NumberAnimation {
@@ -85,7 +87,7 @@ StyledRect {
                     from: 0
                     to: 1
                     running: true
-                    paused: !root.enabled || !root.visible
+                    paused: !root.active || !root.enabled || !root.visible
                     easing.type: Easing.Linear
                     duration: GlobalConfig.dashboard.resourceUpdateInterval
                 }

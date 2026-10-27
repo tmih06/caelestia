@@ -111,6 +111,8 @@ private:
     qint64 m_position = 0;
     bool m_loading = false;
     std::atomic<quint32> m_generation = 0;
+    // Mirrors the onVideoFrame() early-out so the sink thread can skip queueing ignored frames
+    std::atomic_bool m_dropFrames{ false };
     QMetaObject::Connection m_windowConn;
     QMetaObject::Connection m_sinkConn;
     QMediaPlayer m_player;

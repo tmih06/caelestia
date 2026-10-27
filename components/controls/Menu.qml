@@ -35,9 +35,9 @@ MouseArea {
     signal itemSelected(item: MenuItem)
 
     parent: {
-        const win = QsWindow.window;
+        const win = root.attachTo.QsWindow.window;
         const contentWin = win as ContentWindow; // If inside the drawer content window, put it inside the interaction wrapper so hover works
-        return contentWin ? contentWin.interactionWrapper : (win as QsWindow).contentItem;
+        return contentWin ? contentWin.interactionWrapper : win?.contentItem ?? null;
     }
     anchors.fill: parent
 
@@ -47,7 +47,7 @@ MouseArea {
     onClicked: expanded = false
 
     opacity: expanded ? 1 : 0
-    layer.enabled: opacity < 1
+    layer.enabled: opacity > 0 && opacity < 1
 
     Behavior on opacity {
         Anim {

@@ -23,6 +23,11 @@ Item {
     readonly property rect pageViewport: Qt.rect(viewWrapper.x, viewWrapper.y, view.width, view.height)
     readonly property bool switchingTabs: view ? Math.abs(view.contentX - (view.currentItem?.x ?? 0)) > 0.5 : false
 
+    // The content tree stays loaded while the compact media dock needs morph
+    // targets, so pages must gate their animations on actual on-screen state
+    // rather than their own visible/enabled properties.
+    readonly property bool contentActive: root.screenState.dashboard
+
     readonly property var dashboardTabs: {
         const allTabs = [
             {
@@ -59,6 +64,10 @@ Item {
 
     readonly property real nonAnimWidth: view.implicitWidth + viewWrapper.anchors.margins * 2
     readonly property real nonAnimHeight: tabs.implicitHeight + tabs.anchors.topMargin + view.implicitHeight + viewWrapper.anchors.margins * 2
+
+    function tabActive(id: string): bool {
+        return root.contentActive && root.dashboardTabs[view.currentIndex]?.id === id;
+    }
 
     function mediaTargetRect(item: Item): rect {
         const pos = item.mapToItem(root, 0, 0);
@@ -220,6 +229,13 @@ Item {
                         // Keep positioners measurable; zero opacity culls offscreen rendering.
                         opacity: index === view.currentIndex || (x < view.contentX + view.width && x + width > view.contentX) ? 1 : 0
                         enabled: index === view.currentIndex
+
+                        Binding {
+                            target: paneLoader.item
+                            property: "enabled"
+                            when: paneLoader.item !== null
+                            value: paneLoader.enabled && root.contentActive
+                        }
                     }
                 }
             }
@@ -230,6 +246,7 @@ Item {
                 Dash {
                     screenState: root.screenState
                     facePicker: root.facePicker
+                    pageActive: root.tabActive("dashboard")
                 }
             }
 
@@ -239,6 +256,7 @@ Item {
                 Media {
                     screenState: root.screenState
                     sharedMedia: root.sharedMedia
+                    pageActive: root.tabActive("media")
                     animateBackground: root.animatePages && !root.switchingTabs && view.mediaPageOffset < view.width && view.mediaPageOffset + (view.mediaPane?.width ?? 0) > 0
                 }
             }
@@ -246,7 +264,9 @@ Item {
             Component {
                 id: performanceComponent
 
-                Performance {}
+                Performance {
+                    pageActive: root.tabActive("performance")
+                }
             }
 
             Component {

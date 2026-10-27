@@ -4,6 +4,9 @@
 
 #include <cava/cavacore.h>
 
+#include <atomic>
+#include <vector>
+
 #include "audioprovider.hpp"
 
 namespace caelestia::shell::services {
@@ -17,8 +20,13 @@ public:
 
     void setBars(int bars);
 
+    // Called on the GUI thread once a queued valuesChanged has been consumed
+    void clearUpdatePending() noexcept { m_updatePending.store(false, std::memory_order_release); }
+
 signals:
-    void valuesChanged(QVector<double> values);
+    // const-ref so emitting does not copy into the signal parameter; only the queued event
+    // holds the immutable snapshot passed to the GUI thread.
+    void valuesChanged(const QVector<double>& values);
 
 protected:
     void process() override;
@@ -29,7 +37,17 @@ private:
     double* m_out;
 
     int m_bars;
-    QVector<double> m_values;
+    std::vector<double> m_publishValues; // Last published values, retained for change detection
+    std::vector<double> m_work;          // Reused scratch
+
+    // Skip FFT work while the captured stream is pure digital silence
+    quint64 m_lastSignal = 0;
+    quint64 m_lastChunk = ~0ull;
+    int m_duplicateTicks = 0;
+    int m_silentTicks = 0;
+    bool m_idle = true;
+    // At most one valuesChanged may be queued; newer frames replace it when the GUI thread lags
+    std::atomic_bool m_updatePending{ false };
 
     void reload();
     void initCava();
@@ -55,6 +73,9 @@ public:
 signals:
     void barsChanged();
     void valuesChanged();
+
+protected:
+    void prepareProcessor() override;
 
 private:
     int m_bars;

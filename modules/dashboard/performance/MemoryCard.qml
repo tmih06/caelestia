@@ -13,6 +13,8 @@ StyledRect {
 
     readonly property color accent: Colours.palette.m3tertiary
 
+    property bool active: true
+
     color: Colours.tPalette.m3surfaceContainer
     radius: Tokens.rounding.medium
 
@@ -20,7 +22,7 @@ StyledRect {
     implicitHeight: layout.implicitHeight + Tokens.padding.large * 2
 
     ServiceRef {
-        service: root.enabled && root.visible ? Memory : null
+        service: root.active && root.enabled && root.visible ? Memory : null
     }
 
     ColumnLayout {

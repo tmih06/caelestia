@@ -17,6 +17,9 @@ namespace {
 
 Q_LOGGING_CATEGORY(lcAcWorker, "caelestia.services.ac.worker", QtInfoMsg)
 
+// Number of 10 ms timer expirations to clear stale capture for after a state transition
+constexpr quint64 k_idleClearExpirations = 10;
+
 } // namespace
 
 namespace caelestia::shell::services {
@@ -26,6 +29,7 @@ PipeWireWorker::PipeWireWorker(std::stop_token token, AudioCollector* collector)
     , m_stream(nullptr)
     , m_timer(nullptr)
     , m_idle(true)
+    , m_idleExpirations(0)
     , m_token(std::move(token))
     , m_collector(collector) {
     pw_init(nullptr, nullptr);
@@ -98,7 +102,15 @@ PipeWireWorker::PipeWireWorker(std::stop_token token, AudioCollector* collector)
         return;
     }
 
-    pw_main_loop_run(m_loop);
+    {
+        // quit() queues onto the PipeWire loop and wakes its poll immediately.
+        // Destroy the callback before the loop so a concurrent stop cannot use freed state.
+        std::stop_callback stopCallback(m_token, [loop = m_loop] {
+            pw_main_loop_quit(loop);
+        });
+        if (!m_token.stop_requested())
+            pw_main_loop_run(m_loop);
+    }
 
     pw_stream_destroy(m_stream);
     pw_main_loop_destroy(m_loop);
@@ -114,18 +126,21 @@ void PipeWireWorker::handleTimeout(void* data, uint64_t expirations) {
     }
 
     if (!self->m_idle) {
-        if (expirations < 10) {
+        // expirations counts callbacks, not elapsed lifetime. Clear stale
+        // capture for ~100 ms, then stop waking until the stream changes.
+        self->m_idleExpirations += expirations;
+        if (self->m_idleExpirations < k_idleClearExpirations) {
             self->m_collector->clearBuffer();
         } else {
             self->m_idle = true;
-            timespec timeout = { .tv_sec = 0, .tv_nsec = 500 * SPA_NSEC_PER_MSEC };
-            pw_loop_update_timer(pw_main_loop_get_loop(self->m_loop), self->m_timer, &timeout, &timeout, false);
+            pw_loop_update_timer(pw_main_loop_get_loop(self->m_loop), self->m_timer, nullptr, nullptr, false);
         }
     }
 }
 
 void PipeWireWorker::streamStateChanged(pw_stream_state state) {
     m_idle = false;
+    m_idleExpirations = 0;
     switch (state) {
     case PW_STREAM_STATE_PAUSED: {
         timespec timeout = { .tv_sec = 0, .tv_nsec = 10 * SPA_NSEC_PER_MSEC };
@@ -176,6 +191,7 @@ void AudioCollector::clearBuffer() {
 }
 
 void AudioCollector::loadChunk(const qint16* samples, quint32 count) {
+    m_chunkGeneration.fetch_add(1, std::memory_order_relaxed);
     if (m_discardPending.exchange(false, std::memory_order_acquire)) {
         m_pending.clear();
     }
@@ -183,6 +199,14 @@ void AudioCollector::loadChunk(const qint16* samples, quint32 count) {
     const auto toFloat = [](qint16 sample) {
         return static_cast<float>(sample) / 32768.0f;
     };
+
+    // Digital silence never changes the visualiser or beat tracker, so record only chunks that
+    // contain signal. One linear scan of the chunk is far cheaper than downstream FFT work.
+    if (std::any_of(samples, samples + count, [](qint16 sample) {
+            return sample != 0;
+        })) {
+        m_signalGeneration.fetch_add(1, std::memory_order_relaxed);
+    }
 
     // Called on the RT thread, so stash the chunk until the next callback rather than wait on a reader
     const std::unique_lock lock(m_samplesLock, std::try_to_lock);

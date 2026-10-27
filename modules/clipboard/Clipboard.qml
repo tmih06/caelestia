@@ -477,6 +477,14 @@ Item {
                         smooth: true
                         mipmap: true
                         asynchronous: true
+                        cache: false
+
+                        // Decode at viewport resolution; bucket resize changes
+                        // so dragging the window does not reload every frame.
+                        sourceSize: {
+                            const dpr = (QsWindow.window as QsWindow)?.devicePixelRatio ?? 1;
+                            return Qt.size(Math.max(128, Math.ceil(width * dpr / 128) * 128), Math.max(128, Math.ceil(height * dpr / 128) * 128));
+                        }
 
                         // Fade in on image load
                         opacity: status === Image.Ready ? 1 : 0

@@ -86,7 +86,7 @@ Item {
             id: waveProgAnim
 
             running: true
-            paused: root.wavePaused || wave.amplitudeMultiplier === 0
+            paused: root.wavePaused || wave.amplitudeMultiplier === 0 || !root.visible || !root.enabled || root.opacity === 0
             from: 0
             to: 1
             duration: 2000

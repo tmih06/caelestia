@@ -40,7 +40,9 @@ Item {
         id: wrapper
 
         anchors.fill: parent
-        layer.enabled: true
+        // Only needed as the mask texture of the blur effect; avoid allocating
+        // a full-screen offscreen buffer when the visualiser is hidden.
+        layer.enabled: root.opacity > 0 && Config.background.visualiser.blur
 
         Loader {
             asynchronous: true

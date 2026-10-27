@@ -133,6 +133,18 @@ QString AppDb::uuid() const {
     return m_uuid;
 }
 
+AppDb::~AppDb() {
+    // Named QSqlDatabase connections are process-global; without this every reloaded AppDb
+    // (and its SQLite file handle/cache) would stay registered until the shell exits.
+    {
+        auto db = QSqlDatabase::database(m_uuid, false);
+        if (db.isValid()) {
+            db.close();
+        }
+    }
+    QSqlDatabase::removeDatabase(m_uuid);
+}
+
 QString AppDb::path() const {
     return m_path;
 }

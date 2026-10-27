@@ -67,11 +67,12 @@ float smaxSharpA(float a, float b, float k) {
 void main() {
     vec2 pixel = vec2(paddedX, paddedY) + qt_TexCoord0 * vec2(paddedW, paddedH);
 
-    // Phase 1: compute per-rect SDF, track owner. We can't smin yet because excluded
-    // pairs need to skip the smooth blend, which requires pairwise pass below.
+    // Phase 1: compute per-rect SDF, track owner and the hard-min baseline. We can't smin yet
+    // because excluded pairs need to skip the smooth blend, which requires the pairwise pass.
     float dArr[16];
     int owner = -2;
     float minDist = 1e10;
+    float mergedSdf = 1e10;
 
     for (int i = 0; i < rectCount; i++) {
         vec4 rect = rectData[i * 5];         // cx, cy, hw, hh
@@ -144,33 +145,31 @@ void main() {
         }
 
         dArr[i] = d;
+        mergedSdf = min(mergedSdf, d);
         if (d < smoothFactor && d < minDist) {
             minDist = d;
             owner = i;
         }
     }
 
-    // Phase 2: hard-min baseline over all rects.
-    float mergedSdf = 1e10;
-    for (int i = 0; i < rectCount; i++) {
-        mergedSdf = min(mergedSdf, dArr[i]);
-    }
-
-    // Phase 3: pair-wise smin contributions, skipping excluded pairs. Pair smin <= min,
-    // so taking the min over all non-excluded pair smins gives the smoothly-merged SDF.
-    for (int i = 0; i < rectCount; i++) {
-        if (dArr[i] >= 1e9)
-            continue;
-        int excludeMask = floatBitsToInt(rectData[i * 5 + 1].x);
-        for (int j = i + 1; j < rectCount; j++) {
-            if (dArr[j] >= 1e9)
+    // Phase 2: pair-wise smin contributions, skipping excluded pairs. Pair smin <= min, and it only
+    // deviates from min where both operands are < smoothFactor, so it cannot change the result when
+    // the hard minimum is already outside the blend range.
+    if (mergedSdf < smoothFactor) {
+        for (int i = 0; i < rectCount; i++) {
+            if (dArr[i] >= 1e9)
                 continue;
-            if ((excludeMask & (1 << j)) != 0)
-                continue;
-            // Circular smin deviates from min only where BOTH dArr are < smoothFactor.
-            if (max(dArr[i], dArr[j]) >= smoothFactor)
-                continue;
-            mergedSdf = min(mergedSdf, smin(dArr[i], dArr[j], smoothFactor));
+            int excludeMask = floatBitsToInt(rectData[i * 5 + 1].x);
+            for (int j = i + 1; j < rectCount; j++) {
+                if (dArr[j] >= 1e9)
+                    continue;
+                if ((excludeMask & (1 << j)) != 0)
+                    continue;
+                // Circular smin deviates from min only where BOTH dArr are < smoothFactor.
+                if (max(dArr[i], dArr[j]) >= smoothFactor)
+                    continue;
+                mergedSdf = min(mergedSdf, smin(dArr[i], dArr[j], smoothFactor));
+            }
         }
     }
 

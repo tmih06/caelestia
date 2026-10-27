@@ -25,6 +25,7 @@ protected:
 
 private:
     QTimer* m_timer = nullptr;
+    bool m_started = false;
 };
 
 class AudioProvider : public Service {
@@ -38,6 +39,11 @@ protected:
     AudioProcessor* m_processor;
 
     void init();
+
+    // Applies configuration that must be in place before the processor thread starts.
+    virtual void prepareProcessor() {}
+
+    [[nodiscard]] bool processorThreadStarted() const { return m_thread != nullptr; }
 
 private:
     QThread* m_thread;

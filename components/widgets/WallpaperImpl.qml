@@ -21,6 +21,7 @@ Item {
 
     property string source: Wallpapers.current
     property ShaderEffectSource currentCapture: capture1
+    property ShaderEffectSource transitionFrom
     property real transitionProgress: 1
 
     onSourceChanged: {
@@ -28,7 +29,7 @@ Item {
 
         if (transitionProgress < 1) {
             currentCapture = currentCapture === capture1 ? capture2 : capture1;
-            currentCapture.sourceItem = transition;
+            currentCapture.sourceItem = transition.item;
         } else {
             currentCapture.sourceItem = live;
         }
@@ -46,6 +47,11 @@ Item {
         duration: root.shader.duration * Tokens.anim.durations.scale
         easing: root.shader.easing
         to: 1
+        onFinished: {
+            root.transitionFrom = null;
+            capture1.sourceItem = null;
+            capture2.sourceItem = null;
+        }
     }
 
     ShaderEffectSource {
@@ -57,7 +63,7 @@ Item {
 
         onScheduledUpdateCompleted: {
             visible = false;
-            transition.from = this;
+            root.transitionFrom = this;
             root.transitionProgress = 0;
             live.source = root.source;
             if (live.ready)
@@ -74,7 +80,7 @@ Item {
 
         onScheduledUpdateCompleted: {
             visible = false;
-            transition.from = this;
+            root.transitionFrom = this;
             root.transitionProgress = 0;
             live.source = root.source;
             if (live.ready)
@@ -88,7 +94,7 @@ Item {
         anchors.fill: parent
         playing: PersistentState.wallpaperPlaying
         animate: false
-        layer.enabled: true
+        layer.enabled: root.transitionProgress < 1
 
         onReadyChanged: {
             if (ready && source === root.source)
@@ -96,15 +102,17 @@ Item {
         }
     }
 
-    ShaderEffect {
+    Loader {
         id: transition
 
-        property Item from
-        property Item to: live
-        property real progress: root.transitionProgress
-
         anchors.fill: parent
-        visible: root.transitionProgress < 1
-        fragmentShader: root.shader.url
+        active: root.transitionProgress < 1
+        sourceComponent: ShaderEffect {
+            property Item from: root.transitionFrom
+            property Item to: live
+            property real progress: root.transitionProgress
+
+            fragmentShader: root.shader.url
+        }
     }
 }

@@ -10,6 +10,7 @@ GridLayout {
 
     required property ScreenState screenState
     required property FileDialog facePicker
+    property bool pageActive: true // Dashboard is open on this tab
 
     rowSpacing: Tokens.spacing.medium
     columnSpacing: Tokens.spacing.medium
@@ -81,6 +82,8 @@ GridLayout {
 
         Resources {
             id: resources
+
+            active: root.pageActive
         }
     }
 
@@ -95,6 +98,8 @@ GridLayout {
 
         Media {
             id: media
+
+            active: root.pageActive
         }
     }
 

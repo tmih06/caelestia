@@ -12,6 +12,7 @@ Item {
 
     required property ScreenState screenState
     property bool sharedMedia: false
+    property bool pageActive: true // Dashboard is open on this tab
     property bool animateBackground: true
 
     implicitWidth: Tokens.sizes.dashboard.mediaTabWidth
@@ -150,6 +151,7 @@ Item {
                     LyricsAndSelector {
                         Layout.fillHeight: true
                         implicitWidth: Tokens.sizes.dashboard.mediaSectionWidth
+                        pageActive: root.pageActive
                     }
                 }
             }

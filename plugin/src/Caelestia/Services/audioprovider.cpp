@@ -28,6 +28,7 @@ void AudioProcessor::init() {
 }
 
 void AudioProcessor::start() {
+    m_started = true;
     QMetaObject::invokeMethod(&AudioCollector::instance(), &AudioCollector::ref, Qt::QueuedConnection, this);
     if (m_timer) {
         m_timer->start();
@@ -38,7 +39,10 @@ void AudioProcessor::stop() {
     if (m_timer) {
         m_timer->stop();
     }
-    QMetaObject::invokeMethod(&AudioCollector::instance(), &AudioCollector::unref, Qt::QueuedConnection, this);
+    if (m_started) {
+        m_started = false;
+        QMetaObject::invokeMethod(&AudioCollector::instance(), &AudioCollector::unref, Qt::QueuedConnection, this);
+    }
 }
 
 AudioProvider::AudioProvider(QObject* parent)
@@ -50,6 +54,9 @@ AudioProvider::~AudioProvider() {
     if (m_thread) {
         m_thread->quit();
         m_thread->wait();
+    } else {
+        // The processor thread was never needed, so we own the processor directly
+        delete m_processor;
     }
 }
 
@@ -60,6 +67,7 @@ void AudioProvider::init() {
     }
 
     m_thread = new QThread(this);
+    m_thread->setObjectName(QStringLiteral("caelestia-audio"));
     m_processor->moveToThread(m_thread);
 
     connect(m_thread, &QThread::started, m_processor, &AudioProcessor::init);
@@ -70,14 +78,21 @@ void AudioProvider::init() {
 }
 
 void AudioProvider::start() {
-    if (m_processor) {
-        AudioCollector::instance(); // Create instance on main thread
-        QMetaObject::invokeMethod(m_processor, &AudioProcessor::start);
+    if (!m_processor) {
+        return;
     }
+
+    AudioCollector::instance(); // Create instance on main thread
+    if (!m_thread) {
+        // Defer the processor thread, its timer and its DSP plans until something actually uses audio
+        prepareProcessor();
+        init();
+    }
+    QMetaObject::invokeMethod(m_processor, &AudioProcessor::start);
 }
 
 void AudioProvider::stop() {
-    if (m_processor) {
+    if (m_processor && m_thread) {
         QMetaObject::invokeMethod(m_processor, &AudioProcessor::stop);
     }
 }

@@ -55,6 +55,7 @@ private:
     pw_stream* m_stream;
     spa_source* m_timer;
     bool m_idle;
+    quint64 m_idleExpirations;
 
     std::stop_token m_token;
     AudioCollector* m_collector;
@@ -78,6 +79,16 @@ public:
     quint32 readChunk(float* out, quint32 count = 0);
     quint32 readChunk(double* out, quint32 count = 0);
 
+    // Increments whenever a chunk carrying actual signal (any non-zero sample) arrives. Consumers
+    // compare successive values to cheaply detect that the stream is still pure digital silence.
+    [[nodiscard]] quint64 signalGeneration() const noexcept {
+        return m_signalGeneration.load(std::memory_order_relaxed);
+    }
+
+    // Increments for every captured chunk, silent or not, so consumers can skip duplicate windows
+    // when their timer fires before the next chunk arrives.
+    [[nodiscard]] quint64 chunkGeneration() const noexcept { return m_chunkGeneration.load(std::memory_order_relaxed); }
+
 private:
     explicit AudioCollector(QObject* parent = nullptr);
     ~AudioCollector() override;
@@ -87,6 +98,8 @@ private:
     ac::SpinLock m_samplesLock;
     util::RingBuffer<float> m_pending; // Writer thread only, holds chunks which arrived while a reader had the lock
     std::atomic<bool> m_discardPending;
+    std::atomic<quint64> m_signalGeneration{ 0 };
+    std::atomic<quint64> m_chunkGeneration{ 0 };
     quint32 m_sampleCount;
 
     template <typename T> quint32 readLatest(T* out, quint32 count);

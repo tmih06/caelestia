@@ -1,11 +1,34 @@
 #include "memory.hpp"
 
+#include <qbytearrayview.h>
 #include <qfile.h>
-#include <qregularexpression.h>
+
+#include <charconv>
+#include <optional>
+#include <system_error>
 
 namespace caelestia::shell::services {
 
 using Qt::StringLiterals::operator""_s;
+
+namespace {
+
+[[nodiscard]] std::optional<quint64> parseFirstNumber(QByteArrayView line) {
+    const char* pos = line.constData();
+    const char* const end = pos + line.size();
+    while (pos < end && (*pos == ' ' || *pos == '\t')) {
+        ++pos;
+    }
+
+    quint64 value = 0;
+    const auto [next, ec] = std::from_chars(pos, end, value);
+    if (ec != std::errc{}) {
+        return std::nullopt;
+    }
+    return value;
+}
+
+} // namespace
 
 Memory::Memory(QObject* parent)
     : TickingService(parent) {}
@@ -30,29 +53,35 @@ void Memory::tick() {
     const QByteArray data = f.readAll();
     f.close();
 
-    static const QRegularExpression k_reTotal(u"MemTotal: *(\\d+)"_s);
-    static const QRegularExpression k_reAvail(u"MemAvailable: *(\\d+)"_s);
-    const QString text = QString::fromLatin1(data);
+    std::optional<quint64> totalKib;
+    std::optional<quint64> availKib;
 
-    const auto totalMatch = k_reTotal.match(text);
-    const auto availMatch = k_reAvail.match(text);
-    if (!totalMatch.hasMatch() || !availMatch.hasMatch()) {
+    QByteArrayView remaining(data);
+    while (!remaining.isEmpty()) {
+        const qsizetype newline = remaining.indexOf('\n');
+        const auto line = newline < 0 ? remaining : remaining.first(newline);
+        remaining = newline < 0 ? QByteArrayView() : remaining.sliced(newline + 1);
+
+        if (line.startsWith(QByteArrayView("MemTotal:"))) {
+            totalKib = parseFirstNumber(line.sliced(9));
+        } else if (line.startsWith(QByteArrayView("MemAvailable:"))) {
+            availKib = parseFirstNumber(line.sliced(13));
+        }
+    }
+
+    if (!totalKib || !availKib || *totalKib == 0) {
         return;
     }
 
-    const quint64 totalKib = totalMatch.captured(1).toULongLong();
-    const quint64 availKib = availMatch.captured(1).toULongLong();
-    if (totalKib == 0) {
-        return;
-    }
-    const quint64 usedKib = totalKib > availKib ? totalKib - availKib : 0;
+    const quint64 total = *totalKib;
+    const quint64 usedKib = total > *availKib ? total - *availKib : 0;
 
-    if (totalKib == m_lastTotal && usedKib == m_lastUsed) {
+    if (total == m_lastTotal && usedKib == m_lastUsed) {
         return;
     }
-    m_lastTotal = totalKib;
+    m_lastTotal = total;
     m_lastUsed = usedKib;
-    m_total = static_cast<qreal>(totalKib);
+    m_total = static_cast<qreal>(total);
     m_used = static_cast<qreal>(usedKib);
     emit changed();
 }

@@ -185,6 +185,37 @@ Calendar dates and weekday headers share seven equal-width columns and matching
 spacing. Its six-row height comes from font metrics rather than assigned cell
 heights, keeping alignment and the Dashboard's natural size stable across visits.
 
+### Resource lifecycle
+
+Shared loading, progress, and waveform controls pause while hidden or disabled and
+resume when shown. Fading list viewports use an offscreen mask only while an edge
+needs fading; closed menus do not retain a full-window compositing layer.
+Wallpaper compositing runs only during transitions, and completed transitions
+release their capture sources. Interrupted wallpaper changes still capture the
+currently displayed transition before starting the next one.
+
+Cached dashboard pages release sensor/audio references and defer lyric requests
+until selected. Audio DSP plans and worker threads start on first use; duplicate
+capture windows and settled digital silence skip FFT work. Spectrum delivery is
+bounded to one queued update, and the compact waveform retains its 30 fps paint
+cadence with cached geometry calculations.
+Capture shutdown explicitly wakes the worker loop rather than waiting for an idle
+timer, so releasing the last audio reference does not block drawer transitions.
+
+NetworkManager event bursts share a debounced refresh (200 ms) and device-status
+query; passive list reads use its cache rather than starting a blocking Wi-Fi
+scan. Explicit UI rescans still request fresh results. Finished command objects
+are destroyed. Hyprland refresh requests are
+coalesced within an event-loop turn. Notification ages wake on minute/hour
+boundaries, and paused media polling runs at 1 Hz rather than 5 Hz. External-display
+DDC probing is skipped on internal-display-only systems.
+
+Clipboard images decode in viewport-sized 128px buckets, including device pixel
+ratio, instead of retaining native-resolution previews. Wallpaper-cache access
+timestamps have five-minute resolution; the existing 512 MiB eviction cap remains.
+Application-frequency database connections are released when their model is
+destroyed, including shell reloads.
+
 ### PFP/Wallpapers
 
 The profile picture for the dashboard is read from the file `~/.face`. You can set it by clicking it in the dashboard,

@@ -15,6 +15,9 @@ public:
     explicit BeatProcessor(QObject* parent = nullptr);
     ~BeatProcessor() override;
 
+    // Allocates the aubio plan/buffers; called on first real start so an unused BeatTracker costs nothing
+    void prepare();
+
 signals:
     void beat(smpl_t bpm);
 
@@ -25,6 +28,8 @@ private:
     aubio_tempo_t* m_tempo;
     fvec_t* m_in;
     fvec_t* m_out;
+    quint64 m_lastSignal = 0;
+    quint64 m_lastChunk = ~0ull;
 };
 
 class BeatTracker : public AudioProvider {
@@ -41,6 +46,9 @@ public:
 signals:
     void bpmChanged();
     void beat(smpl_t bpm);
+
+protected:
+    void prepareProcessor() override;
 
 private:
     smpl_t m_bpm;

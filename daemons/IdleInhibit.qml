@@ -18,7 +18,18 @@ Scope {
 
     IdleInhibitor {
         enabled: RuntimeState.inhibitIdle
-        window: PanelWindow {
+        window: inhibitSurface.item
+    }
+
+    // The inhibitor only needs a (transparent, zero-sized) layer surface while
+    // inhibition is requested; keeping one alive for the whole session costs a
+    // Wayland surface and window for nothing.
+    LazyLoader {
+        id: inhibitSurface
+
+        active: RuntimeState.inhibitIdle
+
+        PanelWindow {
             implicitWidth: 0
             implicitHeight: 0
             color: "transparent"

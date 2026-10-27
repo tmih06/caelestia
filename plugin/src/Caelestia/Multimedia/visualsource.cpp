@@ -77,6 +77,7 @@ void VisualSource::setPlaying(bool playing) {
         return;
 
     m_playing = playing;
+    m_dropFrames.store(m_videoReady && m_playing, std::memory_order_relaxed);
     emit playingChanged();
     syncPlayer();
 }
@@ -111,7 +112,7 @@ void VisualSource::setVideoOutput(QObject* videoOutput) {
         m_sinkConn = QObject::connect(
             sink, &QVideoSink::videoFrameChanged, this,
             [this](const QVideoFrame& frame) {
-                if (!frame.isValid())
+                if (m_dropFrames.load(std::memory_order_relaxed) || !frame.isValid())
                     return;
 
                 QMetaObject::invokeMethod(
@@ -162,6 +163,7 @@ void VisualSource::setVideoReady(bool videoReady) {
         return;
 
     m_videoReady = videoReady;
+    m_dropFrames.store(m_videoReady && m_playing, std::memory_order_relaxed);
     emit videoReadyChanged();
 }
 

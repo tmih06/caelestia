@@ -40,6 +40,15 @@ Singleton {
     // anything other than that as a usable connection.
     readonly property bool hasAvailableEthernet: ethernetDevices.some(d => d.state !== "unavailable")
     property list<var> activeProcesses: []
+    // Every connection event used to spawn its own `nmcli device status` (and
+    // the same query is asked for by several refresh paths at once). Queue the
+    // callers so a burst shares a single invocation.
+    property var _deviceStatusCallbacks: []
+    property bool _deviceStatusPending: false
+    // /sys/class/net/<iface>/device exists exactly for physical NICs. Only
+    // positive results are remembered: a name can appear later (hotplugged
+    // dock), but one that has a device symlink never loses it.
+    property var _physicalInterfaces: ({})
 
     readonly property alias connectionCheckTimer: connectionCheckTimer
     readonly property alias immediateCheckTimer: immediateCheckTimer
@@ -199,6 +208,9 @@ Singleton {
             if (index >= 0) {
                 activeProcesses.splice(index, 1);
             }
+            // Each invocation used to stay parented to the root forever once it
+            // finished; nothing reads it after this point, so release it.
+            proc.destroy();
         });
 
         Qt.callLater(() => {
@@ -207,14 +219,33 @@ Singleton {
     }
 
     function getDeviceStatus(callback: var): void {
-        executeCommand(["-t", "-f", root.deviceStatusFields, root.nmcliCommandDevice, "status"], result => {
+        fetchDeviceStatus(result => {
             if (callback)
                 callback(result.output);
         });
     }
 
-    function getWirelessInterfaces(callback: var): void {
+    // Single-flight `nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device status`.
+    // Concurrent callers are answered from the same invocation.
+    function fetchDeviceStatus(callback: var): void {
+        if (callback)
+            root._deviceStatusCallbacks.push(callback);
+
+        if (root._deviceStatusPending)
+            return;
+
+        root._deviceStatusPending = true;
         executeCommand(["-t", "-f", root.deviceStatusFields, root.nmcliCommandDevice, "status"], result => {
+            root._deviceStatusPending = false;
+            const callbacks = root._deviceStatusCallbacks;
+            root._deviceStatusCallbacks = [];
+            for (const cb of callbacks)
+                cb(result);
+        });
+    }
+
+    function getWirelessInterfaces(callback: var): void {
+        fetchDeviceStatus(result => {
             const interfaces = parseDeviceStatusOutput(result.output, root.deviceTypeWifi);
             root.wirelessInterfaces = interfaces;
             if (callback)
@@ -223,7 +254,7 @@ Singleton {
     }
 
     function getEthernetInterfaces(callback: var): void {
-        executeCommand(["-t", "-f", root.deviceStatusFields, root.nmcliCommandDevice, "status"], result => {
+        fetchDeviceStatus(result => {
             const interfaces = parseDeviceStatusOutput(result.output, root.deviceTypeEthernet);
             const applyInterfaces = filtered => {
                 const devices = filtered.map(iface => ({
@@ -256,6 +287,14 @@ Singleton {
             // connections. A physical NIC always has
             // /sys/class/net/<iface>/device; veth/bridge/tun interfaces
             // never do, so that's how we tell them apart.
+            const known = root._physicalInterfaces;
+            const unknown = interfaces.map(iface => iface.device).filter(dev => !known[dev]);
+
+            if (unknown.length === 0) {
+                applyInterfaces(interfaces);
+                return;
+            }
+
             const proc = physicalCheckProc.createObject(root);
             proc.callback = result => {
                 if (!result.success) {
@@ -265,12 +304,18 @@ Singleton {
                 }
 
                 const physicalSet = result.output.trim().split("\n").filter(l => l.length > 0);
-                const filtered = interfaces.filter(iface => physicalSet.includes(iface.device));
+                if (physicalSet.length > 0) {
+                    const next = Object.assign({}, known);
+                    for (const name of physicalSet)
+                        next[name] = true;
+                    root._physicalInterfaces = next;
+                }
 
+                const filtered = interfaces.filter(iface => known[iface.device] || physicalSet.includes(iface.device));
                 applyInterfaces(filtered);
             };
 
-            proc.exec(["sh", "-c", 'test -d /sys/class/net || exit 1; for i do [ -e "/sys/class/net/$i/device" ] && printf "%s\\n" "$i"; done; exit 0', "sh", ...interfaces.map(iface => iface.device)]);
+            proc.exec(["sh", "-c", 'test -d /sys/class/net || exit 1; for i do [ -e "/sys/class/net/$i/device" ] && printf "%s\\n" "$i"; done; exit 0', "sh", ...unknown]);
         });
     }
 
@@ -966,7 +1011,13 @@ Singleton {
     }
 
     function getNetworks(callback: var): void {
-        executeCommand(["-g", root.networkDetailFields, "d", "w"], result => {
+        // `device wifi list` defaults to `--rescan auto`, which performs a
+        // blocking scan when NetworkManager's cache is older than 30s. Called
+        // from startup, connection events and after an explicit rescan, that
+        // scan can hold the query for seconds (measured 2.5s+, with callers
+        // piling up), so passively read the cached list. Fresh scans stay on
+        // the explicit rescan path (`rescanWifi()` / rescanProc).
+        executeCommand(["-g", root.networkDetailFields, root.nmcliCommandDevice, root.nmcliCommandWifi, "list", "--rescan", "no"], result => {
             if (!result.success) {
                 if (callback)
                     callback([]);
@@ -1386,7 +1437,14 @@ Singleton {
         return details;
     }
 
+    // `nmcli monitor` emits several lines for a single change (and one burst per
+    // transition), each of which used to trigger a full set of nmcli queries.
+    // Coalesce the burst into one refresh.
     function refreshOnConnectionChange(): void {
+        refreshDebounceTimer.restart();
+    }
+
+    function applyConnectionChange(): void {
         getNetworks(networks => {
             const newActive = root.active;
 
@@ -1720,6 +1778,15 @@ Singleton {
         onTriggered: {
             monitorProc.running = true;
         }
+    }
+
+    Timer {
+        id: refreshDebounceTimer
+
+        // Short enough to stay imperceptible, long enough to swallow the batch
+        // of events a single NetworkManager transition produces.
+        interval: 200
+        onTriggered: root.applyConnectionChange()
     }
 
     LoggingCategory {

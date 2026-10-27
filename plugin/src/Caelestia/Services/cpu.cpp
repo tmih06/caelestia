@@ -1,9 +1,13 @@
 #include "cpu.hpp"
 
+#include <qbytearrayview.h>
 #include <qfile.h>
 #include <qregularexpression.h>
 
+#include <array>
+#include <charconv>
 #include <cmath>
+#include <system_error>
 
 #include "sensorslib.hpp"
 
@@ -64,23 +68,35 @@ void Cpu::refreshPercentage() {
     if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) {
         return;
     }
-    const QByteArray data = f.readAll();
+    const QByteArray data = f.readLine();
     f.close();
 
-    static const QRegularExpression k_re(
-        u"^cpu\\s+(\\d+)\\s+(\\d+)\\s+(\\d+)\\s+(\\d+)\\s+(\\d+)\\s+(\\d+)\\s+(\\d+)"_s);
-    const auto match = k_re.match(QString::fromLatin1(data));
-    if (!match.hasMatch()) {
+    // Aggregate line only, e.g. "cpu  user nice system idle iowait irq softirq ..."
+    const qsizetype start = data.indexOf(QByteArrayView("cpu "));
+    if (start < 0) {
         return;
+    }
+
+    const char* pos = data.constData() + start + 4;
+    const char* const end = data.constData() + data.size();
+    std::array<quint64, 7> fields{};
+    for (auto& field : fields) {
+        while (pos < end && (*pos == ' ' || *pos == '\t')) {
+            ++pos;
+        }
+        const auto [next, ec] = std::from_chars(pos, end, field);
+        if (ec != std::errc{}) {
+            return;
+        }
+        pos = next;
     }
 
     quint64 total = 0;
     quint64 idle = 0;
-    for (int i = 1; i <= 7; ++i) {
-        const quint64 v = match.captured(i).toULongLong();
-        total += v;
-        if (i == 4 || i == 5) {
-            idle += v;
+    for (int i = 0; i < 7; ++i) {
+        total += fields[static_cast<size_t>(i)];
+        if (i == 3 || i == 4) {
+            idle += fields[static_cast<size_t>(i)];
         }
     }
 

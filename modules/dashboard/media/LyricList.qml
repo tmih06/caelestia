@@ -15,8 +15,12 @@ import qs.services
 Item {
     id: root
 
-    // Funny binding hack to make lyrics update
+    // Funny binding hack to make lyrics update. Skip lookups while the page is
+    // cached offscreen so track changes do not trigger network work.
     readonly property var _: {
+        if (!root.pageActive)
+            return;
+
         const p = Players.active;
         if (p)
             Lyrics.setTrack(p.trackArtist, p.trackTitle, p.trackAlbum, p.length);
@@ -26,15 +30,16 @@ Item {
 
     readonly property real fadeAmount: 0.1
     property list<string> lyricList: Lyrics.lyrics
+    property bool pageActive: true
 
-    layer.enabled: true
+    layer.enabled: root.pageActive
     layer.effect: Mask {
         maskSource: mask
 
         Rectangle {
             id: mask
 
-            layer.enabled: true
+            layer.enabled: root.pageActive
             visible: false
             implicitWidth: root.width
             implicitHeight: root.height

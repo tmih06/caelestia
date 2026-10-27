@@ -38,7 +38,45 @@ Singleton {
 
     property string lastSpecialWorkspace: ""
 
+    property bool _toplevelsRefreshQueued: false
+    property bool _workspacesRefreshQueued: false
+    property bool _monitorsRefreshQueued: false
+
     signal configReloaded
+
+    // A single compositor action emits several raw events, and each one used to
+    // trigger its own IPC query. Coalesce everything raised in the same event
+    // loop turn into one query; the reply is fetched after the events landed,
+    // so the resulting state is equally fresh.
+    function requestToplevelsRefresh(): void {
+        if (_toplevelsRefreshQueued)
+            return;
+        _toplevelsRefreshQueued = true;
+        Qt.callLater(() => {
+            _toplevelsRefreshQueued = false;
+            Hyprland.refreshToplevels();
+        });
+    }
+
+    function requestWorkspacesRefresh(): void {
+        if (_workspacesRefreshQueued)
+            return;
+        _workspacesRefreshQueued = true;
+        Qt.callLater(() => {
+            _workspacesRefreshQueued = false;
+            Hyprland.refreshWorkspaces();
+        });
+    }
+
+    function requestMonitorsRefresh(): void {
+        if (_monitorsRefreshQueued)
+            return;
+        _monitorsRefreshQueued = true;
+        Qt.callLater(() => {
+            _monitorsRefreshQueued = false;
+            Hyprland.refreshMonitors();
+        });
+    }
 
     function dispatch(request: string): void {
         Hyprland.dispatch(request);
@@ -130,17 +168,17 @@ Singleton {
                 root.configReloaded();
                 root.reloadDynamicConfs();
             } else if (["workspace", "moveworkspace", "activespecial", "focusedmon"].includes(n)) {
-                Hyprland.refreshWorkspaces();
-                Hyprland.refreshMonitors();
+                root.requestWorkspacesRefresh();
+                root.requestMonitorsRefresh();
             } else if (["openwindow", "closewindow", "movewindow"].includes(n)) {
-                Hyprland.refreshToplevels();
-                Hyprland.refreshWorkspaces();
+                root.requestToplevelsRefresh();
+                root.requestWorkspacesRefresh();
             } else if (n.includes("mon")) {
-                Hyprland.refreshMonitors();
+                root.requestMonitorsRefresh();
             } else if (n.includes("workspace")) {
-                Hyprland.refreshWorkspaces();
+                root.requestWorkspacesRefresh();
             } else if (n.includes("window") || n.includes("group") || ["pin", "fullscreen", "changefloatingmode", "minimize"].includes(n)) {
-                Hyprland.refreshToplevels();
+                root.requestToplevelsRefresh();
             }
         }
 

@@ -11,6 +11,8 @@ import qs.services
 Item {
     id: root
 
+    property bool pageActive: true // Dashboard is open on this tab
+
     implicitWidth: placeholder.active ? Tokens.sizes.dashboard.perfPlaceholderWidth : content.implicitWidth
     implicitHeight: placeholder.active ? placeholder.implicitHeight + Tokens.padding.extraLarge * 2 : content.implicitHeight
 
@@ -78,9 +80,10 @@ Item {
                         usage: Cpu.percentage
                         temperature: Cpu.temperature
                         accent: Colours.palette.m3primary
+                        active: root.pageActive
 
                         ServiceRef {
-                            service: root.enabled && root.visible ? Cpu : null
+                            service: root.pageActive && root.enabled && root.visible ? Cpu : null
                         }
                     }
                 }
@@ -97,9 +100,10 @@ Item {
                         usage: Gpu.percentage
                         temperature: Gpu.temperature
                         accent: Colours.palette.m3secondary
+                        active: root.pageActive
 
                         ServiceRef {
-                            service: root.enabled && root.visible ? Gpu : null
+                            service: root.pageActive && root.enabled && root.visible ? Gpu : null
                         }
                     }
                 }
@@ -113,21 +117,27 @@ Item {
                     id: storageCard
 
                     active: Config.dashboard.performance.showStorage
-                    sourceComponent: StorageCard {}
+                    sourceComponent: StorageCard {
+                        active: root.pageActive
+                    }
                 }
 
                 WrappedLoader {
                     id: networkCard
 
                     active: Config.dashboard.performance.showNetwork
-                    sourceComponent: NetworkCard {}
+                    sourceComponent: NetworkCard {
+                        active: root.pageActive
+                    }
                 }
 
                 WrappedLoader {
                     id: memoryCard
 
                     active: Config.dashboard.performance.showMemory
-                    sourceComponent: MemoryCard {}
+                    sourceComponent: MemoryCard {
+                        active: root.pageActive
+                    }
                 }
             }
         }

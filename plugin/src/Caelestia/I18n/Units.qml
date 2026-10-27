@@ -13,6 +13,32 @@ QtObject {
         return format === ClockFormat.TwelveHour;
     }
 
+    // Hoisted so frequently formatted values don't rebuild an 18-entry object (and re-run every
+    // translation lookup) on each call. Re-evaluates when the translation catalog changes.
+    readonly property var _dataUnitFormats: ({
+        "B": Tr.tr("%1 B"),
+        "KB": Tr.tr("%1 KB"),
+        "MB": Tr.tr("%1 MB"),
+        "GB": Tr.tr("%1 GB"),
+        "TB": Tr.tr("%1 TB"),
+        "KiB": Tr.tr("%1 KiB"),
+        "MiB": Tr.tr("%1 MiB"),
+        "GiB": Tr.tr("%1 GiB"),
+        "TiB": Tr.tr("%1 TiB"),
+        "B/s": Tr.tr("%1 B/s"),
+        "KB/s": Tr.tr("%1 KB/s"),
+        "MB/s": Tr.tr("%1 MB/s"),
+        "GB/s": Tr.tr("%1 GB/s"),
+        "TB/s": Tr.tr("%1 TB/s"),
+        "KiB/s": Tr.tr("%1 KiB/s"),
+        "MiB/s": Tr.tr("%1 MiB/s"),
+        "GiB/s": Tr.tr("%1 GiB/s"),
+        "TiB/s": Tr.tr("%1 TiB/s")
+    })
+
+    readonly property var _binaryUnits: ["B", "KiB", "MiB", "GiB", "TiB"]
+    readonly property var _decimalUnits: ["B", "KB", "MB", "GB", "TB"]
+
     // Resolves TemperatureUnit.Auto to a concrete unit based on the locale
     function resolveTempUnit(unit: int): int {
         if (Number(unit) !== TemperatureUnit.Auto)
@@ -52,32 +78,12 @@ QtObject {
 
     // Formats an already scaled value with the given data unit suffix
     function withDataUnit(value: var, unit: string): string {
-        const formats = {
-            "B": Tr.tr("%1 B"),
-            "KB": Tr.tr("%1 KB"),
-            "MB": Tr.tr("%1 MB"),
-            "GB": Tr.tr("%1 GB"),
-            "TB": Tr.tr("%1 TB"),
-            "KiB": Tr.tr("%1 KiB"),
-            "MiB": Tr.tr("%1 MiB"),
-            "GiB": Tr.tr("%1 GiB"),
-            "TiB": Tr.tr("%1 TiB"),
-            "B/s": Tr.tr("%1 B/s"),
-            "KB/s": Tr.tr("%1 KB/s"),
-            "MB/s": Tr.tr("%1 MB/s"),
-            "GB/s": Tr.tr("%1 GB/s"),
-            "TB/s": Tr.tr("%1 TB/s"),
-            "KiB/s": Tr.tr("%1 KiB/s"),
-            "MiB/s": Tr.tr("%1 MiB/s"),
-            "GiB/s": Tr.tr("%1 GiB/s"),
-            "TiB/s": Tr.tr("%1 TiB/s")
-        };
-        return (formats[unit] ?? ("%1 " + unit)).arg(value);
+        return (_dataUnitFormats[unit] ?? ("%1 " + unit)).arg(value);
     }
 
     function _scaleBytes(bytes: real, refBytes: real): var {
         const binary = Number(GlobalConfig.services.dataUnits) === DataUnit.Binary;
-        const units = binary ? ["B", "KiB", "MiB", "GiB", "TiB"] : ["B", "KB", "MB", "GB", "TB"];
+        const units = binary ? _binaryUnits : _decimalUnits;
         const k = binary ? 1024 : 1000;
 
         let value = isFinite(bytes) && bytes > 0 ? bytes : 0;

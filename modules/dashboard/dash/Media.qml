@@ -19,6 +19,8 @@ Item {
         return active?.length ? (active.position % active.length) / active.length : 0;
     }
 
+    property bool active: true // Dashboard is open on this tab
+
     readonly property real arcCoverGap: Tokens.spacing.extraSmall
 
     anchors.top: parent.top
@@ -32,7 +34,7 @@ Item {
     }
 
     Timer {
-        running: root.enabled && root.visible && (Players.active?.isPlaying ?? false)
+        running: root.active && root.enabled && root.visible && (Players.active?.isPlaying ?? false)
         interval: GlobalConfig.dashboard.mediaUpdateInterval
         triggeredOnStart: true
         repeat: true
@@ -40,7 +42,7 @@ Item {
     }
 
     ServiceRef {
-        service: root.enabled && root.visible ? Audio.beatTracker : null
+        service: root.active && root.enabled && root.visible ? Audio.beatTracker : null
     }
 
     CircularProgress {
@@ -58,7 +60,7 @@ Item {
         wavy: true
         waveFrequency: 8
         waveDuration: 2000
-        wavePaused: !root.enabled || !Players.active?.isPlaying
+        wavePaused: !root.active || !root.enabled || !Players.active?.isPlaying
     }
 
     CoverArt {
@@ -69,6 +71,7 @@ Item {
         anchors.right: parent.right
         anchors.margins: Tokens.padding.medium + root.arcCoverGap + prog.thickness
         implicitHeight: width
+        animated: root.active
     }
 
     StyledText {
@@ -172,7 +175,7 @@ Item {
         anchors.bottomMargin: Tokens.padding.large
         anchors.margins: Tokens.padding.extraLargeIncreased
 
-        playing: root.enabled && root.visible && (Players.active?.isPlaying ?? false)
+        playing: root.active && root.enabled && root.visible && (Players.active?.isPlaying ?? false)
         speed: Audio.beatTracker.bpm / Config.general.mediaGifSpeedAdjustment
         source: Paths.absolutePath(Config.paths.mediaGif)
         asynchronous: true

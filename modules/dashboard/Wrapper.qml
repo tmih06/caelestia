@@ -32,7 +32,7 @@ Item {
 
     readonly property bool enabled: Config.dashboard.enabled
     readonly property bool expanded: screenState.dashboard && enabled
-    readonly property bool mediaDock: compactDock ? compactDock.dockId === "media" : false
+    readonly property bool mediaDock: enabled && compactDock ? compactDock.dockId === "media" : false
     readonly property bool mediaSelected: (expandedContent.item as Content)?.dashboardTabs[screenState.dashboardTab]?.id === "media"
     property bool morphTargetsReady: false
     property int morphAttempts: 0
@@ -284,6 +284,7 @@ Item {
             y: -mediaClip.y
             width: root.width
             height: root.height
+            visible: root.mediaDock && !root.fullscreen
             compactWidth: root.compactWidth
             compactHeight: root.compactHeight
             active: !root.expanded

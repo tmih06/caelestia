@@ -26,6 +26,8 @@ Item {
     property real brightness
 
     function show(): void {
+        if (!Config.osd.enabled)
+            return;
         screenState.osd = true;
         timer.restart();
     }
@@ -69,6 +71,7 @@ Item {
             root.sourceVolume = Audio.sourceVolume;
         }
 
+        enabled: root.Config.osd.enabled
         target: Audio
     }
 
@@ -78,6 +81,7 @@ Item {
             root.brightness = root.monitor?.brightness ?? 0;
         }
 
+        enabled: root.Config.osd.enabled
         target: root.monitor
     }
 

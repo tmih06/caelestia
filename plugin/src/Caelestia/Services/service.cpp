@@ -6,11 +6,14 @@ Service::Service(QObject* parent)
     : QObject(parent) {}
 
 void Service::ref(QObject* sender) {
+    if (!sender || m_refs.contains(sender)) {
+        return;
+    }
     if (m_refs.isEmpty()) {
         start();
     }
 
-    QObject::connect(sender, &QObject::destroyed, this, &Service::unref);
+    QObject::connect(sender, &QObject::destroyed, this, &Service::unref, Qt::UniqueConnection);
     m_refs << sender;
 }
 
