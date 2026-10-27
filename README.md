@@ -12,6 +12,12 @@
 
 https://github.com/user-attachments/assets/0840f496-575c-4ca6-83a8-87bb01a85c5f
 
+## Contributing
+
+Start with the [contributor guide](.github/CONTRIBUTING.md) for development,
+architecture constraints, and verification. Coding agents should also read
+[AGENTS.md](AGENTS.md).
+
 ## Components
 
 - Widgets: [`Quickshell`](https://quickshell.outfoxxed.me)
