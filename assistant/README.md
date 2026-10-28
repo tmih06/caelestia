@@ -9,8 +9,10 @@ The wrapper adds only:
 - `--no-skills`
 - `--no-context-files`
 - `--no-prompt-templates`
+- `--no-tools`
 - `--model ${ASSISTANT_MODEL:-groq/qwen/qwen3.8-27b}` when `--model` is absent
-- an inline `before_agent_start` hook that forces an **empty system prompt**
+- an inline extension that forces an **empty system prompt** and clears the
+  startup header, removing PiG's pig logo
 
 If you pass `--system-prompt` or `--append-system-prompt`, the empty-prompt hook
 is not installed and PiG's normal prompt handling applies.

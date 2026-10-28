@@ -42,6 +42,9 @@ func main() {
 		}
 		defaults = append(defaults, "--model", model)
 	}
+	if !hasArg(args, "--no-tools", "-nt", "--tools", "-t") {
+		defaults = append(defaults, "--no-tools")
+	}
 
 	opts := &cli.MainOptions{}
 	if !hasSystemPrompt {
@@ -64,6 +67,18 @@ func emptySystemPrompt(api extension.API) error {
 	api.OnBeforeAgentStart(func(context.Context, extension.BeforeAgentStartEvent) (extension.BeforeAgentStartEventResult, error) {
 		empty := ""
 		return extension.BeforeAgentStartEventResult{SystemPrompt: &empty}, nil
+	})
+	api.OnSessionStart(func(ctx context.Context, _ extension.SessionStartEvent) error {
+		extCtx := extension.FromContext(ctx)
+		if extCtx == nil {
+			return nil
+		}
+		ui, err := extCtx.UI()
+		if err != nil {
+			return nil
+		}
+		ui.SetHeader(extension.FrameHeader(nil, 0))
+		return nil
 	})
 	return nil
 }
