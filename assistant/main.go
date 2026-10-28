@@ -13,6 +13,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"strings"
 
@@ -76,31 +77,33 @@ func extensionFactory(api extension.API) error {
 // Groq's Qwen chat template rejects developer messages, while PiG emits that
 // role for reasoning models with developer-role compatibility.
 func rewriteDeveloperRole(_ context.Context, event extension.BeforeProviderRequestEvent) (any, error) {
-	payload, ok := event.Payload.(map[string]any)
-	if !ok {
+	raw, err := json.Marshal(event.Payload)
+	if err != nil {
+		return nil, nil
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(raw, &payload); err != nil {
 		return nil, nil
 	}
 	changed := false
-	switch messages := payload["messages"].(type) {
-	case []any:
-		for _, raw := range messages {
-			if message, ok := raw.(map[string]any); ok && message["role"] == "developer" {
-				message["role"] = "system"
-				changed = true
+	if messages, ok := payload["messages"].([]any); ok {
+		for _, rawMessage := range messages {
+			message, ok := rawMessage.(map[string]any)
+			if !ok || message["role"] != "developer" {
+				continue
 			}
-		}
-	case []map[string]any:
-		for _, message := range messages {
-			if message["role"] == "developer" {
-				message["role"] = "system"
-				changed = true
-			}
+			message["role"] = "system"
+			changed = true
 		}
 	}
 	if !changed {
 		return nil, nil
 	}
-	return payload, nil
+	rewritten, err := json.Marshal(payload)
+	if err != nil {
+		return nil, nil
+	}
+	return json.RawMessage(rewritten), nil
 }
 
 func configureHeader(api extension.API) error {
