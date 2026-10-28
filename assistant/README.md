@@ -1,30 +1,61 @@
 # assistant
 
-Minimal terminal harness on top of PiG's `coding` SDK. PiG owns the agent loop,
-tool dispatch, session log, context accounting, provider auth, and compaction;
-this package only supplies the TUI and a strict, empty starting state.
+Terminal harness on top of PiG's `coding` SDK. PiG owns the agent loop, tool
+dispatch, JSONL sessions, context accounting, compaction, and provider auth.
+This package supplies the TUI and a strict starting state.
 
-Disabled at construction:
+## Starting state
 
-- skills
-- context files (`AGENTS.md`, `CLAUDE.md`)
-- prompt templates
-- extensions and MCP
+- no skills
+- no context files (`AGENTS.md`, `CLAUDE.md`)
+- no prompt templates
+- no extensions or MCP
+- **empty system prompt by default**
 
-The system prompt is an empty `ai.OrderedSections`, so PiG does not fall back to
-its built-in coding prompt.
+`ResourceLoader: coding.NoResources` and `SystemPromptSections: ai.OrderedSections{}`
+prevent PiG from falling back to its coding prompt.
 
-## Build
+## System prompt
 
-Builds run in GitHub Actions; do not build on the desktop.
+Resolution order:
+
+1. `-system "text"`
+2. `-system-file path`
+3. `~/.config/caelestia-assistant/system.md` if it exists
+4. empty
+
+In the TUI:
+
+```
+/system                 show prompt and path
+/system set <text>      replace live
+/system clear           clear live
+/system reload          re-read the file
+```
+
+The file is read at startup and on `/system reload`; `/new` uses the current
+prompt.
+
+## Models and providers
+
+`/model` opens a picker; typing filters, `enter` switches, `esc` cancels. The
+selection is saved to `~/.local/state/caelestia-assistant/model` and used on the
+next launch. Providers come from PiG's registry and appear when their key is set:
+
+```sh
+GROQ_API_KEY=...        # groq/...
+OPENAI_API_KEY=...      # openai/...
+OPENROUTER_API_KEY=...  # openrouter/...
+ANTHROPIC_API_KEY=...   # anthropic/...
+```
+
+Builds run in GitHub Actions; do not build on this machine.
 
 ```sh
 gh workflow run assistant.yml
 gh run watch
 gh run download <run-id> -n assistant-linux-amd64 -D bin
 ```
-
-The artifact contains `assistant`.
 
 ## Run
 
@@ -33,11 +64,11 @@ export GROQ_API_KEY='...'
 ./bin/assistant -model groq/qwen/qwen3.8-27b
 ```
 
-Flags: `-cwd`, `-system`, `-session-dir`, `-no-session`.
+Flags: `-model`, `-system`, `-system-file`, `-cwd`, `-session-dir`,
+`-no-session`.
 
-Built-in PiG tools stay active (`read`, `bash`, `edit`, `write`, `grep`,
-`find`, `ls`). Sessions are JSONL under
-`~/.local/state/caelestia-assistant/sessions`.
+Keys: `enter` send, `ctrl+j` newline, `esc` cancel/close, `ctrl+c` cancel then
+quit, `pgup/pgdn` scroll, `?` help.
 
-In the TUI: `enter` send, `esc` cancel, `ctrl+c` cancel/quit, `ctrl+d` quit,
-`/tools`, `/session`, `/new`, `/quit`.
+Tools stay active (`read`, `bash`, `edit`, `write`, `grep`, `find`, `ls`).
+Sessions are JSONL under `~/.local/state/caelestia-assistant/sessions`.
