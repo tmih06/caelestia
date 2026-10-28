@@ -48,19 +48,16 @@ func main() {
 	if !hasArg(args, "--tools", "-t") && !hasArg(args, "--no-tools", "-nt") {
 		defaults = append(defaults, "--tools", webSearchToolName, "--no-mcp")
 	}
+	if !hasSystemPrompt {
+		defaults = append(defaults, "--system-prompt", defaultSystemPrompt)
+	}
 
 	opts := &cli.MainOptions{
 		ExtensionFactories: []extension.InlineExtension{
 			extension.NamedInlineExtension{
-				Name: "assistant-web-search",
-				Factory: func(api extension.API) error {
-					prompt := defaultSystemPrompt
-					if hasSystemPrompt {
-						prompt = ""
-					}
-					return extensionFactory(api, prompt)
-				},
-				Hidden: true,
+				Name:    "assistant-web-search",
+				Factory: extensionFactory,
+				Hidden:  true,
 			},
 		},
 	}
@@ -68,16 +65,9 @@ func main() {
 	cli.Main(append(defaults, args...), opts)
 }
 
-// extensionFactory registers the web search tool, applies the default system
-// prompt, and clears PiG's startup header.
-func extensionFactory(api extension.API, systemPrompt string) error {
+// extensionFactory registers the web search tool and clears PiG's startup header.
+func extensionFactory(api extension.API) error {
 	api.RegisterTool(webSearchTool())
-	if systemPrompt != "" {
-		prompt := systemPrompt
-		api.OnBeforeAgentStart(func(context.Context, extension.BeforeAgentStartEvent) (extension.BeforeAgentStartEventResult, error) {
-			return extension.BeforeAgentStartEventResult{SystemPrompt: &prompt}, nil
-		})
-	}
 	return configureHeader(api)
 }
 
