@@ -6,8 +6,7 @@
 //
 //   - no skills, context files, or prompt templates;
 //   - only the web_search tool by default; PiG's prebuilt tools are not selected;
-//   - an inline before_agent_start hook that forces an empty system prompt
-//     unless the caller supplies one;
+//   - a short default system prompt, unless the caller supplies one;
 //   - a cleared startup header, removing PiG's pig logo;
 //   - a default model when the caller passes no --model.
 package main
@@ -22,6 +21,8 @@ import (
 )
 
 const defaultModel = "groq/qwen/qwen3.8-27b"
+
+const defaultSystemPrompt = "You are Loio, a personal assistant. Answer briefly and focus on the main point. Use the available tools when they help complete the user's request; do not claim tools or capabilities you do not have. When you use web_search, cite the source URLs."
 
 func main() {
 	args := os.Args[1:]
@@ -53,7 +54,11 @@ func main() {
 			extension.NamedInlineExtension{
 				Name: "assistant-web-search",
 				Factory: func(api extension.API) error {
-					return extensionFactory(api, !hasSystemPrompt)
+					prompt := defaultSystemPrompt
+					if hasSystemPrompt {
+						prompt = ""
+					}
+					return extensionFactory(api, prompt)
 				},
 				Hidden: true,
 			},
@@ -63,14 +68,14 @@ func main() {
 	cli.Main(append(defaults, args...), opts)
 }
 
-// extensionFactory registers the web search tool, forces an empty system
+// extensionFactory registers the web search tool, applies the default system
 // prompt, and clears PiG's startup header.
-func extensionFactory(api extension.API, emptyPrompt bool) error {
+func extensionFactory(api extension.API, systemPrompt string) error {
 	api.RegisterTool(webSearchTool())
-	if emptyPrompt {
+	if systemPrompt != "" {
+		prompt := systemPrompt
 		api.OnBeforeAgentStart(func(context.Context, extension.BeforeAgentStartEvent) (extension.BeforeAgentStartEventResult, error) {
-			empty := ""
-			return extension.BeforeAgentStartEventResult{SystemPrompt: &empty}, nil
+			return extension.BeforeAgentStartEventResult{SystemPrompt: &prompt}, nil
 		})
 	}
 	return configureHeader(api)

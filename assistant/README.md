@@ -1,6 +1,6 @@
-# assistant
+# loio
 
-Thin wrapper around PiG's stock CLI and TUI. No UI or agent loop is
+Personal assistant. Thin wrapper around PiG's stock CLI and TUI. No UI or agent loop is
 reimplemented here: `coding/cli.Main` starts the same TUI as `pig`, and PiG owns
 sessions, tools, model selection, context accounting, compaction, and providers.
 
@@ -11,8 +11,18 @@ The wrapper adds only:
 - `--no-prompt-templates`
 - `--tools web_search --no-mcp`, so none of PiG's prebuilt tools are selected
 - `--model ${ASSISTANT_MODEL:-groq/qwen/qwen3.8-27b}` when `--model` is absent
-- an inline extension that registers `web_search`, forces an **empty system
-  prompt**, and clears the startup header, removing PiG's pig logo
+- an inline extension that registers `web_search`, applies a short default
+  system prompt, and clears the startup header, removing PiG's pig logo
+
+Default system prompt:
+
+> You are Loio, a personal assistant. Answer briefly and focus on the main point. Use
+> the available tools when they help complete the user's request; do not claim
+> tools or capabilities you do not have. When you use web_search, cite the
+> source URLs.
+
+Passing `--system-prompt` or `--append-system-prompt` disables this default and
+uses PiG's normal prompt handling.
 
 ## web_search
 
