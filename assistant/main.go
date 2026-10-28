@@ -68,7 +68,39 @@ func main() {
 // extensionFactory registers the web search tool and clears PiG's startup header.
 func extensionFactory(api extension.API) error {
 	api.RegisterTool(webSearchTool())
+	api.OnBeforeProviderRequest(rewriteDeveloperRole)
 	return configureHeader(api)
+}
+
+// rewriteDeveloperRole maps the OpenAI-compatible developer role back to system.
+// Groq's Qwen chat template rejects developer messages, while PiG emits that
+// role for reasoning models with developer-role compatibility.
+func rewriteDeveloperRole(_ context.Context, event extension.BeforeProviderRequestEvent) (any, error) {
+	payload, ok := event.Payload.(map[string]any)
+	if !ok {
+		return nil, nil
+	}
+	changed := false
+	switch messages := payload["messages"].(type) {
+	case []any:
+		for _, raw := range messages {
+			if message, ok := raw.(map[string]any); ok && message["role"] == "developer" {
+				message["role"] = "system"
+				changed = true
+			}
+		}
+	case []map[string]any:
+		for _, message := range messages {
+			if message["role"] == "developer" {
+				message["role"] = "system"
+				changed = true
+			}
+		}
+	}
+	if !changed {
+		return nil, nil
+	}
+	return payload, nil
 }
 
 func configureHeader(api extension.API) error {
