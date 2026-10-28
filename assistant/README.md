@@ -9,15 +9,36 @@ The wrapper adds only:
 - `--no-skills`
 - `--no-context-files`
 - `--no-prompt-templates`
-- `--no-tools`, `--exclude-tools '*'`, `--no-mcp`
+- `--tools web_search --no-mcp`, so none of PiG's prebuilt tools are selected
 - `--model ${ASSISTANT_MODEL:-groq/qwen/qwen3.8-27b}` when `--model` is absent
-- an inline extension that forces an **empty system prompt**, clears the
-  selected tool list again before each run, and clears the startup header,
-  removing PiG's pig logo
+- an inline extension that registers `web_search`, forces an **empty system
+  prompt**, and clears the startup header, removing PiG's pig logo
+
+## web_search
+
+The tool returns a direct answer when a provider supplies one, plus result
+titles, URLs, and snippets. The model is told to answer in at most three short
+sentences and cite the URLs.
+
+Providers, in order, all free-tier or free:
+
+| Provider | Setup | Notes |
+| --- | --- | --- |
+| Tavily | `TAVILY_API_KEY` | returns an `answer` plus results; free tier |
+| Brave Search API | `BRAVE_API_KEY` | web results; free tier |
+| SearXNG | `ASSISTANT_SEARX_URL=https://…` | self-hosted or trusted instance with JSON enabled |
+| Wikipedia | none | always tried; best for factual topics |
+| DuckDuckGo Instant Answer | none | last fallback; sparse |
+
+Without a key, Wikipedia and DuckDuckGo still answer many factual questions;
+general web/news search needs one of the free API keys above. Results are cached
+for five minutes. Tests can override endpoints with `ASSISTANT_TAVILY_URL`,
+`ASSISTANT_BRAVE_URL`, `ASSISTANT_WIKI_URL`, and `ASSISTANT_DDG_URL`.
 
 If you pass `--system-prompt` or `--append-system-prompt`, the empty-prompt hook
-is not installed and PiG's normal prompt handling applies. If you pass `--tools`,
-none of the no-tools defaults are added and tools work normally.
+is not installed and PiG's normal prompt handling applies. If you pass `--tools`
+or `--no-tools`, the wrapper uses your selection instead of the default
+`web_search` selection.
 
 ## Build
 

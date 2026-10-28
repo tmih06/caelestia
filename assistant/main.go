@@ -5,16 +5,15 @@
 // This wrapper only supplies:
 //
 //   - no skills, context files, or prompt templates;
-//   - no tools, unless the caller passes --tools;
-//   - an inline before_agent_start hook that forces an empty system prompt and
-//     an empty tool selection unless the caller supplies them;
+//   - only the web_search tool by default; PiG's prebuilt tools are not selected;
+//   - an inline before_agent_start hook that forces an empty system prompt
+//     unless the caller supplies one;
 //   - a cleared startup header, removing PiG's pig logo;
 //   - a default model when the caller passes no --model.
 package main
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"strings"
 
@@ -45,47 +44,36 @@ func main() {
 		}
 		defaults = append(defaults, "--model", model)
 	}
-	toolsExplicit := hasArg(args, "--tools", "-t")
-	if !toolsExplicit {
-		if !hasArg(args, "--no-tools", "-nt") {
-			defaults = append(defaults, "--no-tools")
-		}
-		if !hasArg(args, "--exclude-tools", "-xt") {
-			defaults = append(defaults, "--exclude-tools", "*")
-		}
-		if !hasArg(args, "--no-mcp") {
-			defaults = append(defaults, "--no-mcp")
-		}
+	if !hasArg(args, "--tools", "-t") && !hasArg(args, "--no-tools", "-nt") {
+		defaults = append(defaults, "--tools", webSearchToolName, "--no-mcp")
 	}
 
-	opts := &cli.MainOptions{}
-	if !hasSystemPrompt {
-		opts.ExtensionFactories = []extension.InlineExtension{
+	opts := &cli.MainOptions{
+		ExtensionFactories: []extension.InlineExtension{
 			extension.NamedInlineExtension{
-				Name:    "assistant-empty-prompt",
-				Factory: extensionFactory(!toolsExplicit),
-				Hidden:  true,
+				Name: "assistant-web-search",
+				Factory: func(api extension.API) error {
+					return extensionFactory(api, !hasSystemPrompt)
+				},
+				Hidden: true,
 			},
-		}
+		},
 	}
 
 	cli.Main(append(defaults, args...), opts)
 }
 
-// emptySystemPrompt replaces the run's system prompt with an empty string. The
-// extension result is authoritative for every run, so PiG's coding prompt,
-// context files, and discovered prompt text are not sent.
-func extensionFactory(clearTools bool) extension.ExtensionFactory {
-	return func(api extension.API) error {
-		api.OnBeforeAgentStart(func(ctx context.Context, _ extension.BeforeAgentStartEvent) (extension.BeforeAgentStartEventResult, error) {
-			if clearTools {
-				extension.SetBeforeAgentStartSelectedTools(ctx, json.RawMessage(`[]`))
-			}
+// extensionFactory registers the web search tool, forces an empty system
+// prompt, and clears PiG's startup header.
+func extensionFactory(api extension.API, emptyPrompt bool) error {
+	api.RegisterTool(webSearchTool())
+	if emptyPrompt {
+		api.OnBeforeAgentStart(func(context.Context, extension.BeforeAgentStartEvent) (extension.BeforeAgentStartEventResult, error) {
 			empty := ""
 			return extension.BeforeAgentStartEventResult{SystemPrompt: &empty}, nil
 		})
-		return configureHeader(api)
 	}
+	return configureHeader(api)
 }
 
 func configureHeader(api extension.API) error {
