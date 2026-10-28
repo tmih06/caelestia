@@ -9,13 +9,15 @@ The wrapper adds only:
 - `--no-skills`
 - `--no-context-files`
 - `--no-prompt-templates`
-- `--no-tools`
+- `--no-tools`, `--exclude-tools '*'`, `--no-mcp`
 - `--model ${ASSISTANT_MODEL:-groq/qwen/qwen3.8-27b}` when `--model` is absent
-- an inline extension that forces an **empty system prompt** and clears the
-  startup header, removing PiG's pig logo
+- an inline extension that forces an **empty system prompt**, clears the
+  selected tool list again before each run, and clears the startup header,
+  removing PiG's pig logo
 
 If you pass `--system-prompt` or `--append-system-prompt`, the empty-prompt hook
-is not installed and PiG's normal prompt handling applies.
+is not installed and PiG's normal prompt handling applies. If you pass `--tools`,
+none of the no-tools defaults are added and tools work normally.
 
 ## Build
 

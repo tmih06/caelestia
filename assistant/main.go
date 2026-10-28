@@ -5,13 +5,16 @@
 // This wrapper only supplies:
 //
 //   - no skills, context files, or prompt templates;
-//   - an inline before_agent_start hook that forces an empty system prompt
-//     unless the caller passes --system-prompt or --append-system-prompt;
+//   - no tools, unless the caller passes --tools;
+//   - an inline before_agent_start hook that forces an empty system prompt and
+//     an empty tool selection unless the caller supplies them;
+//   - a cleared startup header, removing PiG's pig logo;
 //   - a default model when the caller passes no --model.
 package main
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"strings"
 
@@ -42,8 +45,17 @@ func main() {
 		}
 		defaults = append(defaults, "--model", model)
 	}
-	if !hasArg(args, "--no-tools", "-nt", "--tools", "-t") {
-		defaults = append(defaults, "--no-tools")
+	toolsExplicit := hasArg(args, "--tools", "-t")
+	if !toolsExplicit {
+		if !hasArg(args, "--no-tools", "-nt") {
+			defaults = append(defaults, "--no-tools")
+		}
+		if !hasArg(args, "--exclude-tools", "-xt") {
+			defaults = append(defaults, "--exclude-tools", "*")
+		}
+		if !hasArg(args, "--no-mcp") {
+			defaults = append(defaults, "--no-mcp")
+		}
 	}
 
 	opts := &cli.MainOptions{}
@@ -51,7 +63,7 @@ func main() {
 		opts.ExtensionFactories = []extension.InlineExtension{
 			extension.NamedInlineExtension{
 				Name:    "assistant-empty-prompt",
-				Factory: emptySystemPrompt,
+				Factory: extensionFactory(!toolsExplicit),
 				Hidden:  true,
 			},
 		}
@@ -63,11 +75,20 @@ func main() {
 // emptySystemPrompt replaces the run's system prompt with an empty string. The
 // extension result is authoritative for every run, so PiG's coding prompt,
 // context files, and discovered prompt text are not sent.
-func emptySystemPrompt(api extension.API) error {
-	api.OnBeforeAgentStart(func(context.Context, extension.BeforeAgentStartEvent) (extension.BeforeAgentStartEventResult, error) {
-		empty := ""
-		return extension.BeforeAgentStartEventResult{SystemPrompt: &empty}, nil
-	})
+func extensionFactory(clearTools bool) extension.ExtensionFactory {
+	return func(api extension.API) error {
+		api.OnBeforeAgentStart(func(ctx context.Context, _ extension.BeforeAgentStartEvent) (extension.BeforeAgentStartEventResult, error) {
+			if clearTools {
+				extension.SetBeforeAgentStartSelectedTools(ctx, json.RawMessage(`[]`))
+			}
+			empty := ""
+			return extension.BeforeAgentStartEventResult{SystemPrompt: &empty}, nil
+		})
+		return configureHeader(api)
+	}
+}
+
+func configureHeader(api extension.API) error {
 	api.OnSessionStart(func(ctx context.Context, _ extension.SessionStartEvent) error {
 		extCtx := extension.FromContext(ctx)
 		if extCtx == nil {
