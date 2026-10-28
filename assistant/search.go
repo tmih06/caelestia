@@ -64,8 +64,9 @@ var (
 	mdLinkTailPattern  = regexp.MustCompile(`\]\([^)]+\)`)
 	mdImagePattern     = regexp.MustCompile(`!\[[^\]]*\]\([^)]+\)`)
 	mdHeadingPattern   = regexp.MustCompile(`(?m)^#{1,6}\s*`)
-	sentencePattern    = regexp.MustCompile(`[.!?]\s+`)
+	sentencePattern    = regexp.MustCompile(`[^.!?]+[.!?]*`)
 	boilerplatePattern = regexp.MustCompile(`(?i)citation|copy citation|manual of style|fact-checked|last updated|select citation`)
+	leadingDatePattern = regexp.MustCompile(`^\s*(?:\d{1,4}[,/]\s*)*(?:\d{4}\s*)?`)
 	spacePattern       = regexp.MustCompile(`\s+`)
 )
 
@@ -660,7 +661,7 @@ func bestSnippet(text, query string, max int) string {
 	if len(terms) == 0 {
 		return limitText(text, max)
 	}
-	sentences := sentencePattern.Split(text, -1)
+	sentences := sentencePattern.FindAllString(text, -1)
 	best, bestScore := "", -1
 	for _, sentence := range sentences {
 		sentence = strings.TrimSpace(sentence)
@@ -687,6 +688,10 @@ func bestSnippet(text, query string, max int) string {
 			best, bestScore = sentence, score
 		}
 	}
+	if best == "" {
+		return limitText(text, max)
+	}
+	best = strings.TrimSpace(leadingDatePattern.ReplaceAllString(best, ""))
 	if best == "" {
 		return limitText(text, max)
 	}
