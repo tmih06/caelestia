@@ -694,8 +694,8 @@ func bestSnippet(text, query string, max int) string {
 		return limitText(text, max)
 	}
 	best = strings.TrimSpace(leadingDatePattern.ReplaceAllString(best, ""))
-	if best == "" {
-		return limitText(text, max)
+	if len(best) < 24 {
+		best = text
 	}
 	return limitText(best, max)
 }
