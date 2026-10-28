@@ -59,9 +59,13 @@ var (
 		sync.Mutex
 		entries map[string]cachedSearch
 	}{entries: make(map[string]cachedSearch)}
-	tagPattern    = regexp.MustCompile(`<[^>]+>`)
-	mdLinkPattern = regexp.MustCompile(`\[([^\]]*)\]\([^)]+\)`)
-	spacePattern  = regexp.MustCompile(`\s+`)
+	tagPattern        = regexp.MustCompile(`<[^>]+>`)
+	mdLinkPattern     = regexp.MustCompile(`\[([^\]]*)\]\([^)]+\)`)
+	mdLinkTailPattern = regexp.MustCompile(`\]\([^)]+\)`)
+	mdImagePattern    = regexp.MustCompile(`!\[[^\]]*\]\([^)]+\)`)
+	mdHeadingPattern  = regexp.MustCompile(`(?m)^#{1,6}\s*`)
+	sentencePattern   = regexp.MustCompile(`[.!?]\s+`)
+	spacePattern      = regexp.MustCompile(`\s+`)
 )
 
 func webSearchTool() extension.ToolDefinition {
@@ -279,7 +283,7 @@ func parallelMCPSearch(ctx context.Context, query string, limit int) (searchResp
 		}
 		snippet := ""
 		if len(result.Excerpts) > 0 {
-			snippet = limitText(cleanSnippet(result.Excerpts[0]), 400)
+			snippet = bestSnippet(strings.Join(result.Excerpts, " "), query, 400)
 		}
 		resp.Results = append(resp.Results, searchResult{
 			Title:   cleanSnippet(result.Title),
@@ -330,7 +334,7 @@ func exaMCPSearch(ctx context.Context, query string, limit int) (searchResponse,
 		if len(resp.Results) >= limit {
 			break
 		}
-		result, ok := parseExaBlock(block)
+		result, ok := parseExaBlock(block, query)
 		if ok {
 			resp.Results = append(resp.Results, result)
 		}
@@ -341,7 +345,7 @@ func exaMCPSearch(ctx context.Context, query string, limit int) (searchResponse,
 	return resp, nil
 }
 
-func parseExaBlock(block string) (searchResult, bool) {
+func parseExaBlock(block, query string) (searchResult, bool) {
 	var result searchResult
 	lines := strings.Split(block, "\n")
 	highlights := -1
@@ -368,7 +372,7 @@ func parseExaBlock(block string) (searchResult, bool) {
 		}
 	}
 	if highlights >= 0 && highlights < len(lines) {
-		result.Snippet = limitText(cleanSnippet(strings.Join(lines[highlights:], " ")), 400)
+		result.Snippet = bestSnippet(strings.Join(lines[highlights:], " "), query, 400)
 	}
 	return result, true
 }
@@ -410,7 +414,7 @@ func duckDuckGoSearch(ctx context.Context, query, recency string, limit int) (se
 			return
 		}
 		if node.Type == xhtml.ElementNode && node.Data == "div" && hasClass(node, "result") && !hasClass(node, "result__") {
-			if result, ok := parseDDGResult(node); ok {
+			if result, ok := parseDDGResult(node, query); ok {
 				results = append(results, result)
 			}
 		}
@@ -425,7 +429,7 @@ func duckDuckGoSearch(ctx context.Context, query, recency string, limit int) (se
 	return searchResponse{Results: results, Source: "DuckDuckGo"}, nil
 }
 
-func parseDDGResult(node *xhtml.Node) (searchResult, bool) {
+func parseDDGResult(node *xhtml.Node, query string) (searchResult, bool) {
 	var link *xhtml.Node
 	var snippet string
 	var find func(*xhtml.Node)
@@ -453,7 +457,7 @@ func parseDDGResult(node *xhtml.Node) (searchResult, bool) {
 	if title == "" {
 		return searchResult{}, false
 	}
-	return searchResult{Title: title, URL: target, Snippet: limitText(cleanSnippet(snippet), 400)}, true
+	return searchResult{Title: title, URL: target, Snippet: bestSnippet(snippet, query, 400)}, true
 }
 
 func wikipediaSearch(ctx context.Context, query string, limit int) (searchResponse, error) {
@@ -636,11 +640,67 @@ func unwrapDDGURL(href string) string {
 
 func cleanSnippet(value string) string {
 	value = stdhtml.UnescapeString(tagPattern.ReplaceAllString(value, " "))
+	value = mdImagePattern.ReplaceAllString(value, " ")
 	value = mdLinkPattern.ReplaceAllString(value, "$1")
+	value = mdLinkTailPattern.ReplaceAllString(value, " ")
+	value = mdHeadingPattern.ReplaceAllString(value, " ")
 	value = strings.ReplaceAll(value, "**", "")
 	value = strings.ReplaceAll(value, "`", "")
 	value = spacePattern.ReplaceAllString(value, " ")
 	return strings.TrimSpace(value)
+}
+
+func bestSnippet(text, query string, max int) string {
+	text = cleanSnippet(text)
+	if text == "" {
+		return ""
+	}
+	terms := queryTerms(query)
+	if len(terms) == 0 {
+		return limitText(text, max)
+	}
+	sentences := sentencePattern.Split(text, -1)
+	best, bestScore := "", -1
+	for _, sentence := range sentences {
+		sentence = strings.TrimSpace(sentence)
+		if sentence == "" {
+			continue
+		}
+		lower := strings.ToLower(sentence)
+		score := 0
+		for _, term := range terms {
+			if strings.Contains(lower, term) {
+				score++
+			}
+		}
+		if strings.Contains(lower, " is ") || strings.Contains(lower, " are ") || strings.Contains(lower, " was ") {
+			score++
+		}
+		if strings.HasSuffix(sentence, "?") {
+			score--
+		}
+		if score > bestScore {
+			best, bestScore = sentence, score
+		}
+	}
+	if best == "" {
+		return limitText(text, max)
+	}
+	return limitText(best, max)
+}
+
+func queryTerms(query string) []string {
+	seen := map[string]bool{}
+	var terms []string
+	for _, field := range strings.Fields(strings.ToLower(query)) {
+		field = strings.Trim(field, `"'()[]{}:,.!?`)
+		if len(field) < 3 || seen[field] {
+			continue
+		}
+		seen[field] = true
+		terms = append(terms, field)
+	}
+	return terms
 }
 
 func limitText(value string, max int) string {
