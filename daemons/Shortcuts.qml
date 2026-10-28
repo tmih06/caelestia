@@ -14,6 +14,45 @@ Scope {
     property bool launcherInterrupted
     readonly property bool hasFullscreen: Hypr.focusedWorkspace?.toplevels.values.some(t => t.lastIpcObject.fullscreen > 1) ?? false
 
+    function openChat(): void {
+        if (root.hasFullscreen)
+            return;
+        const screenState = ShellState.forActive();
+        screenState.launcher = false;
+        screenState.dashboard = false;
+        screenState.session = false;
+        screenState.sidebar = false;
+        screenState.utilities = false;
+        screenState.osd = false;
+        screenState.dashboardTab = screenState.chatTabIndex;
+        screenState.chatTabPinned = true;
+        screenState.dashboard = true;
+        // The dashboard selects the compact dock's media tab while expanding;
+        // restore the chat tab after that settles.
+        Qt.callLater(() => {
+            screenState.dashboardTab = screenState.chatTabIndex;
+        });
+    }
+
+    function closeChat(): void {
+        const screenState = ShellState.forActive();
+        screenState.chatTabPinned = false;
+        if (screenState.dashboard && screenState.dashboardTab === screenState.chatTabIndex)
+            screenState.dashboard = false;
+    }
+
+    function toggleChat(): void {
+        const screenState = ShellState.forActive();
+        if (screenState.dashboard && screenState.dashboardTab === screenState.chatTabIndex) {
+            if (Chat.busy)
+                Chat.cancel();
+            else
+                root.closeChat();
+        } else {
+            root.openChat();
+        }
+    }
+
     // qmllint disable unresolved-type
     CustomShortcut {
         // qmllint enable unresolved-type
@@ -39,6 +78,14 @@ Scope {
             const v = ShellState.forActive();
             v.launcher = v.dashboard = v.osd = v.utilities = !(v.launcher || v.dashboard || v.osd || v.utilities);
         }
+    }
+
+    // qmllint disable unresolved-type
+    CustomShortcut {
+        // qmllint enable unresolved-type
+        name: "chat"
+        description: "Toggle the Loio chat drawer"
+        onPressed: root.toggleChat()
     }
 
     // qmllint disable unresolved-type
@@ -141,6 +188,35 @@ Scope {
         }
 
         target: "drawers"
+    }
+
+    IpcHandler {
+        function open(): void {
+            root.openChat();
+        }
+
+        function close(): void {
+            root.closeChat();
+        }
+
+        function toggle(): void {
+            root.toggleChat();
+        }
+
+        function send(prompt: string): void {
+            root.openChat();
+            Chat.send(prompt);
+        }
+
+        function cancel(): void {
+            Chat.cancel();
+        }
+
+        function clear(): void {
+            Chat.clear();
+        }
+
+        target: "chat"
     }
 
     IpcHandler {

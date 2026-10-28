@@ -57,6 +57,13 @@ Item {
                 iconName: "cloud",
                 text: Tr.tr("Weather"),
                 enabled: Config.dashboard.showWeather
+            },
+            {
+                id: "chat",
+                component: chatComponent,
+                iconName: "forum",
+                text: Tr.tr("Chat"),
+                enabled: true
             }
         ];
         return allTabs.filter(tab => tab.enabled);
@@ -64,6 +71,20 @@ Item {
 
     readonly property real nonAnimWidth: view.implicitWidth + viewWrapper.anchors.margins * 2
     readonly property real nonAnimHeight: tabs.implicitHeight + tabs.anchors.topMargin + view.implicitHeight + viewWrapper.anchors.margins * 2
+
+    Connections {
+        target: root.screenState
+
+        function onDashboardTabChanged(): void {
+            if (root.screenState.dashboard && root.screenState.dashboardTab !== root.screenState.chatTabIndex)
+                root.screenState.chatTabPinned = false;
+        }
+
+        function onDashboardChanged(): void {
+            if (!root.screenState.dashboard)
+                root.screenState.chatTabPinned = false;
+        }
+    }
 
     function tabActive(id: string): bool {
         return root.contentActive && root.dashboardTabs[view.currentIndex]?.id === id;
@@ -273,6 +294,15 @@ Item {
                 id: weatherComponent
 
                 WeatherTab {}
+            }
+
+            Component {
+                id: chatComponent
+
+                ChatPage {
+                    pageActive: root.tabActive("chat")
+                    onCloseRequested: root.screenState.dashboard = false
+                }
             }
 
             Behavior on contentX {

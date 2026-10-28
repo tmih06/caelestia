@@ -71,7 +71,7 @@ Item {
     }
 
     function selectDockTab(): void {
-        if (!compactDock)
+        if (!compactDock || screenState.chatTabPinned)
             return;
         const content = expandedContent.item;
         if (!content || !content.dashboardTabs)
@@ -154,6 +154,8 @@ Item {
 
     onExpandedChanged: {
         if (expanded) {
+            if (screenState.dashboardTab !== screenState.chatTabIndex)
+                screenState.chatTabPinned = false;
             selectDockTab();
             Qt.callLater(updateMorph);
         }
