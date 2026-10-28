@@ -16,24 +16,23 @@ The wrapper adds only:
 
 ## web_search
 
-The tool returns a direct answer when a provider supplies one, plus result
-titles, URLs, and snippets. The model is told to answer in at most three short
-sentences and cite the URLs.
+The tool returns source-backed results and the model is told to answer in at
+most three sentences and cite URLs. No API key is used or read.
 
-Providers, in order, all free-tier or free:
+Keyless chain, in order:
 
-| Provider | Setup | Notes |
+| Order | Backend | Notes |
 | --- | --- | --- |
-| Tavily | `TAVILY_API_KEY` | returns an `answer` plus results; free tier |
-| Brave Search API | `BRAVE_API_KEY` | web results; free tier |
-| SearXNG | `ASSISTANT_SEARX_URL=https://…` | self-hosted or trusted instance with JSON enabled |
-| Wikipedia | none | always tried; best for factual topics |
-| DuckDuckGo Instant Answer | none | last fallback; sparse |
+| 1 | Parallel public MCP (`search.parallel.ai/mcp`) | structured results with excerpts |
+| 2 | Exa public MCP (`mcp.exa.ai/mcp`) | keyless neural search |
+| 3 | DuckDuckGo HTML (`html.duckduckgo.com`) | POST frontend; bot challenges fall through |
+| 4 | Wikipedia REST | factual fallback |
+| 5 | DuckDuckGo Instant Answer | last resort |
 
-Without a key, Wikipedia and DuckDuckGo still answer many factual questions;
-general web/news search needs one of the free API keys above. Results are cached
-for five minutes. Tests can override endpoints with `ASSISTANT_TAVILY_URL`,
-`ASSISTANT_BRAVE_URL`, `ASSISTANT_WIKI_URL`, and `ASSISTANT_DDG_URL`.
+Results are cached for five minutes. Endpoints can be overridden for tests with
+`ASSISTANT_PARALLEL_MCP_URL`, `ASSISTANT_EXA_MCP_URL`, `ASSISTANT_DDG_URL`,
+`ASSISTANT_WIKI_URL`, and `ASSISTANT_DDG_INSTANT_URL`. This mirrors the
+credential-free part of omp's search chain.
 
 If you pass `--system-prompt` or `--append-system-prompt`, the empty-prompt hook
 is not installed and PiG's normal prompt handling applies. If you pass `--tools`
