@@ -507,6 +507,7 @@ func (m model) updateModels(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		chosen := items[m.cursor]
 		if err := m.h.session.SetModel(chosen); err != nil {
+			m.screen = screenChat
 			m.addSystem("model: " + err.Error())
 			return m, nil
 		}
@@ -769,9 +770,6 @@ func (m model) headerView() string {
 		parts = append(parts, dimStyle.Render(ctx))
 	}
 	parts = append(parts, dimStyle.Render("sess "+shortID(m.sessionID)))
-	if m.h.model.ProviderMeta.ProviderID != "" {
-		parts = append(parts, dimStyle.Render(m.h.model.ProviderMeta.ProviderID))
-	}
 	return strings.Join(parts, dimStyle.Render("  ·  "))
 }
 
