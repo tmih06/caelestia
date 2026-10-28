@@ -169,6 +169,21 @@ and the playback timeline. Metadata and time labels move with the timeline durin
 expansion and collapse; shared visuals travel with the Media page and are clipped
 to its viewport. Long titles scroll in both the dock and expanded drawer.
 
+Click the media artwork to switch between title and lyric modes, including while
+lyrics are loading or unavailable. Lyrics are fetched automatically when the track
+changes, even with the drawer closed. Lyric mode shows centered lines scrolling
+upward with playback; the taller dock reveals part of the previous and next lines,
+highlights the current line with a glow, and scrolls long lines sideways. Pausing
+holds the current line; seeking and timing offsets reposition it.
+
+In compact lyric mode, the straight timeline fades downward and a circular progress
+ring expands from behind the artwork. Switching back reverses the spring animation.
+Hover the waveform, not the rest of the dock, to reveal pause while playing.
+
+While lyrics are loading or unavailable, lyric mode shows the lookup source,
+status, and elapsed time. The expanded lyric view also shows lookup status; its
+details menu lists per-source results, errors, timing, and cache hits.
+
 With no media session or recording, the compact dock retracts into the top edge
 and reappears on hover. Media, recording indicators, and open drawers remain visible.
 

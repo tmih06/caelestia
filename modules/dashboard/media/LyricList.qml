@@ -15,21 +15,8 @@ import qs.services
 Item {
     id: root
 
-    // Funny binding hack to make lyrics update. Skip lookups while the page is
-    // cached offscreen so track changes do not trigger network work.
-    readonly property var _: {
-        if (!root.pageActive)
-            return;
-
-        const p = Players.active;
-        if (p)
-            Lyrics.setTrack(p.trackArtist, p.trackTitle, p.trackAlbum, p.length);
-        else
-            Lyrics.clearTrack();
-    }
-
     readonly property real fadeAmount: 0.1
-    property list<string> lyricList: Lyrics.lyrics
+    property list<string> lyricList: MediaLyrics.lines
     property bool pageActive: true
 
     layer.enabled: root.pageActive
@@ -161,7 +148,7 @@ Item {
 
         anchors.centerIn: parent
         asynchronous: true
-        active: opacity > 0
+        active: root.pageActive && opacity > 0
         opacity: 0
 
         sourceComponent: ColumnLayout {
@@ -183,10 +170,11 @@ Item {
                 }
             }
 
-            StyledText {
-                text: Tr.tr("Loading lyrics...")
-                color: Colours.palette.m3onSurfaceVariant
-                font: Tokens.font.title.medium
+            LyricsLookupStatus {
+                Layout.fillWidth: true
+                compact: true
+                centered: true
+                active: root.pageActive && loadingIndicator.opacity > 0
             }
         }
 
@@ -202,7 +190,7 @@ Item {
 
         anchors.centerIn: parent
         asynchronous: true
-        active: opacity > 0
+        active: root.pageActive && opacity > 0
         opacity: 0
 
         sourceComponent: ColumnLayout {
@@ -215,16 +203,23 @@ Item {
                 color: Colours.palette.m3outline
             }
 
-            StyledText {
-                text: Tr.tr("No lyrics found")
-                color: Colours.palette.m3outline
-                font: Tokens.font.title.medium
+            LyricsLookupStatus {
+                Layout.fillWidth: true
+                compact: true
+                centered: true
+                active: root.pageActive && noLyrics.opacity > 0
             }
         }
     }
 
     StyledListView {
         id: lyrics
+
+        function resetIndex(): void {
+            currentIndex = Qt.binding(() => root.pageActive ? MediaLyrics.currentIndex : -1);
+            if (currentIndex >= 0)
+                positionViewAtIndex(currentIndex, ListView.Center);
+        }
 
         anchors.fill: parent
         anchors.topMargin: parent.height * root.fadeAmount / 2
@@ -234,17 +229,12 @@ Item {
         displayMarginEnd: anchors.bottomMargin
 
         model: root.lyricList
-        Component.onCompleted: {
-            currentIndex = Qt.binding(() => {
-                model; // Force update when lyrics change
-                return Lyrics.indexForTime(Players.active?.position ?? 0);
-            });
-            positionViewAtIndex(currentIndex, ListView.Center);
-        }
-        onModelChanged: Qt.callLater(() => positionViewAtIndex(currentIndex, ListView.Center))
+        Component.onCompleted: Qt.callLater(resetIndex)
+        onModelChanged: Qt.callLater(resetIndex)
+        onCountChanged: Qt.callLater(resetIndex)
 
         highlightRangeMode: ListView.ApplyRange
-        highlightMoveDuration: Tokens.anim.durations.large
+        highlightMoveDuration: root.pageActive ? Tokens.anim.durations.large : 0
         highlightMoveVelocity: -1
         preferredHighlightBegin: (height - (currentItem?.implicitHeight ?? 0)) / 2
         preferredHighlightEnd: (height + (currentItem?.implicitHeight ?? 0)) / 2
@@ -266,6 +256,7 @@ Item {
             text: modelData || ". . ."
             color: ListView.isCurrentItem ? Colours.palette.m3primary : mouse.containsMouse ? Colours.palette.m3onSurface : Colours.palette.m3outline
             font: Tokens.font.body.medium
+            horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.WrapAtWordBoundaryOrAnywhere
 
             layer.enabled: effectScale > 0
@@ -290,9 +281,7 @@ Item {
                 cursorShape: Qt.PointingHandCursor
                 hoverEnabled: true
                 onClicked: {
-                    const p = Players.active;
-                    if (p)
-                        p.position = Lyrics.timeForIndex(lyric.index);
+                    MediaProgress.seek(Lyrics.timeForIndex(lyric.index));
                 }
             }
         }

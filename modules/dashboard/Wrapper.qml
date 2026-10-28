@@ -289,6 +289,8 @@ Item {
             compactHeight: root.compactHeight
             active: !root.expanded
             morph: root.morph
+            lyricMode: compact.lyricMode
+            lyricsEnabled: compact.preferLyrics
             targetReady: root.morphTargetsReady
             artTargetRect: root.artTargetRect
             titleTargetRect: root.titleTargetRect
@@ -299,6 +301,7 @@ Item {
             durationLabelTargetRect: root.durationLabelTargetRect
             waveTargetRect: root.waveTargetRect
             enabled: root.mediaSelected || root.morph < 0.05
+            onToggleLyrics: compact.preferLyrics = !compact.preferLyrics
         }
     }
 }

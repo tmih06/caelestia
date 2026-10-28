@@ -1,6 +1,5 @@
 import QtQuick
 import QtQuick.Layouts
-import Caelestia
 import Caelestia.Blobs
 import Caelestia.Config
 import Caelestia.I18n
@@ -62,8 +61,8 @@ Item {
             PropertyChanges {
                 rect.anchors.rightMargin: root.width - root.Tokens.spacing.small
                 rect.anchors.topMargin: -root.Tokens.padding.medium
-                rect.implicitWidth: Math.max(layout.implicitWidth, placeholder.implicitWidth) + root.padding * 2
-                rect.implicitHeight: Math.max(layout.implicitHeight, placeholder.implicitHeight) + root.padding * 2
+                rect.implicitWidth: root.Tokens.sizes.dashboard.mediaSectionWidth + root.padding * 2
+                rect.implicitHeight: (Lyrics.loading || !Lyrics.hasLyrics ? placeholder.implicitHeight : layout.implicitHeight) + root.padding * 2
                 content.opacity: 1
             }
         }
@@ -146,18 +145,17 @@ Item {
                 id: layout
 
                 anchors.centerIn: parent
+                width: Tokens.sizes.dashboard.mediaSectionWidth
                 spacing: Tokens.spacing.extraSmall
                 opacity: 0
 
-                StyledText {
-                    // TRANSLATORS: %1 = lyrics backend name, e.g. LRCLIB
-                    text: Tr.tr("Backend: %1").arg(CUtils.enumToString(Lyrics, "backend"))
-                    color: Colours.palette.m3onSurfaceVariant
-                    animate: true
+                LyricsLookupStatus {
+                    Layout.fillWidth: true
+                    active: root.open && layout.opacity > 0
                 }
 
                 StyledText {
-                    Layout.maximumWidth: Tokens.sizes.dashboard.mediaTabWidth / 2
+                    Layout.fillWidth: true
                     // TRANSLATORS: %1/%2/%3 = matched track title, artist and album
                     text: Tr.tr("Selected candidate: %1 | %2 | %3").arg(Lyrics.selectedCandidate.title).arg(Lyrics.selectedCandidate.artist).arg(Lyrics.selectedCandidate.album)
                     color: Colours.palette.m3onSurfaceVariant
@@ -173,21 +171,12 @@ Item {
                 }
             }
 
-            Item {
+            LyricsLookupStatus {
                 id: placeholder
 
                 anchors.centerIn: parent
-                implicitWidth: placeholderText.implicitWidth
-                implicitHeight: placeholderText.implicitHeight
-
-                StyledText {
-                    id: placeholderText
-
-                    text: Lyrics.loading ? Tr.tr("Loading...") : Tr.tr("No lyrics found")
-                    color: Colours.palette.m3onSurfaceVariant
-                    font: Tokens.font.body.medium
-                    animate: true
-                }
+                width: Tokens.sizes.dashboard.mediaSectionWidth
+                active: root.open && opacity > 0
             }
         }
     }

@@ -1,10 +1,12 @@
 #pragma once
 
+#include <qelapsedtimer.h>
 #include <qhash.h>
 #include <qjsonobject.h>
 #include <qnetworkaccessmanager.h>
 #include <qnetworkreply.h>
 #include <qtimer.h>
+#include <qvariant.h>
 
 #include "lyriccandidate.hpp"
 
@@ -33,8 +35,20 @@ class Lyrics : public QObject {
     Q_PROPERTY(qreal offset READ offset WRITE setOffset NOTIFY offsetChanged)
     Q_PROPERTY(QString trackArtist READ trackArtist NOTIFY trackChanged)
     Q_PROPERTY(QString trackTitle READ trackTitle NOTIFY trackChanged)
+    Q_PROPERTY(LookupState lookupState READ lookupState NOTIFY lookupDetailsChanged)
+    Q_PROPERTY(QVariantList lookupAttempts READ lookupAttempts NOTIFY lookupDetailsChanged)
+    Q_PROPERTY(qint64 lookupElapsedMs READ lookupElapsedMs NOTIFY lookupDetailsChanged)
 
 public:
+    enum LookupState {
+        Idle,
+        Fetching,
+        Success,
+        NotFound,
+        Failed
+    };
+    Q_ENUM(LookupState)
+
     explicit Lyrics(QObject* parent = nullptr);
 
     [[nodiscard]] QStringList lyrics() const;
@@ -50,6 +64,9 @@ public:
     void setOffset(qreal value);
     [[nodiscard]] QString trackArtist() const;
     [[nodiscard]] QString trackTitle() const;
+    [[nodiscard]] LookupState lookupState() const;
+    [[nodiscard]] QVariantList lookupAttempts() const;
+    [[nodiscard]] qint64 lookupElapsedMs() const;
 
     [[nodiscard]] Q_INVOKABLE int indexForTime(qreal time) const;
     [[nodiscard]] Q_INVOKABLE qreal timeForIndex(int index) const;
@@ -68,14 +85,33 @@ signals:
     void hasLyricsChanged();
     void offsetChanged();
     void trackChanged();
+    void lookupDetailsChanged();
 
 private:
+    struct LookupAttempt {
+        LyricsBackend backend = LyricsBackend::Auto;
+        LookupState state = Fetching;
+        qint64 startedMs = 0;
+        qint64 elapsedMs = 0;
+        QString error;
+        bool cached = false;
+    };
+
     void setBackend(LyricsBackend value);
     void setLoading(bool value);
     void setLines(QVector<LyricLine> lines, LyricsBackend source);
     void clearLines();
     void appendCandidates(const QList<LyricCandidate>& add);
     void clearCandidates();
+
+    void resetLookupDetails();
+    void startLookupJob();
+    void beginLookupAttempt(LyricsBackend backend, bool cached = false);
+    void completeLookupAttempt(
+        LyricsBackend backend, LookupState state, const QString& error = {}, bool cached = false);
+    void finishLookupJob(LookupState state);
+    [[nodiscard]] bool lookupHasFailure() const;
+    void notifyLookupDetails();
 
     void scheduleLoad();
     void doLoad();
@@ -130,6 +166,13 @@ private:
     bool m_loading = false;
     bool m_hasLyrics = false;
     qreal m_offset = 0.0;
+
+    LookupState m_lookupState = Idle;
+    QVector<LookupAttempt> m_lookupAttempts;
+    mutable QVariantList m_lookupAttemptValues;
+    mutable bool m_lookupAttemptsDirty = true;
+    QElapsedTimer m_lookupClock;
+    qint64 m_lookupFrozenMs = 0;
 
     QString m_artist;
     QString m_title;

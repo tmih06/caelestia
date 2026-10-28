@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Layouts
+import Quickshell
 import Caelestia.Config
 import Caelestia.I18n
 import qs.components
@@ -11,11 +12,13 @@ Item {
     id: root
 
     property bool active: true
+    property alias preferLyrics: preferences.preferLyrics
 
     readonly property var player: Players.active
     readonly property bool recording: Recorder.running
     readonly property bool media: !recording && !!player
     readonly property bool playing: media && (player?.isPlaying ?? false)
+    property real lyricMode: media && preferLyrics ? 1 : 0
     readonly property string dockId: media ? "media" : recording ? "recording" : "clock"
     readonly property string targetTab: media ? "media" : "dashboard"
 
@@ -28,7 +31,21 @@ Item {
     }
 
     implicitWidth: media ? 348 : row.implicitWidth
-    implicitHeight: media ? 26 : Math.max(24, row.implicitHeight)
+    implicitHeight: media ? 26 + 10 * lyricMode : Math.max(24, row.implicitHeight)
+
+    PersistentProperties {
+        id: preferences
+
+        property bool preferLyrics: true
+
+        reloadableId: "compactMediaMode"
+    }
+
+    Behavior on lyricMode {
+        Anim {
+            type: Anim.DefaultSpatial
+        }
+    }
 
     RowLayout {
         id: row

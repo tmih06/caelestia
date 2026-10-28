@@ -145,11 +145,22 @@ Keep the intended local native-import path explicit.
   the expanded page supply geometry; adding a second rendered copy risks
   flicker and overlapping titles. Shared visuals follow the Media page offset
   and clip to its viewport during tab switching.
+- **Share lyric timing.** `MediaLyrics.qml` owns track loading for the title roll
+  and expanded lyric list, using `MediaProgress.position` and the backend's timing
+  offset. Cached lyric pages must not start their own lookups. Restore list
+  selection after model resets so lyrics arriving mid-song show the current line.
+  Mode preference is independent of lookup success: loading and missing lyrics
+  render `LyricsLookupStatus.qml`, not a forced switch back to the title.
+  The native `Lyrics` service owns source attempts and monotonic lookup timing;
+  visible status views poll only elapsed time while fetching. Background candidate
+  searches must not overwrite the active lookup's source or outcome.
 - **Preserve the animation contract.** Spatial motion uses `Anim` and its
   expressive curves. Test spring overshoot and interrupted transitions, not just
-  final geometry. Keep the dock timebar flat, the expanded slider wavy, and the
-  compact marker synchronized with the same morph. Waveform sampling continues
-  through fade-out, then stops. Long titles scroll in both sizes.
+  final geometry. Keep the title-mode dock timebar flat and the expanded slider
+  wavy. In compact lyric mode, fade the straight bar down while scaling the progress
+  ring out from behind the artwork; drive both from the shared lyric-mode spring.
+  Waveform sampling continues through fade-out, then stops. Limit playback hover
+  controls to the waveform. Long titles and current lyric lines scroll in both sizes.
 - **Treat media capability as data.** `MediaProgress.qml` owns interpolation,
   seeks, and duration caching. Some MPRIS players report current position as
   length when duration is unsupported. Preserve unknown-duration elapsed time

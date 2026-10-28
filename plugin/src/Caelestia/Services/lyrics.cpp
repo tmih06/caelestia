@@ -3,6 +3,7 @@
 #include <qdiriterator.h>
 #include <qfileinfo.h>
 #include <qjsonarray.h>
+#include <qjsonparseerror.h>
 #include <qnetworkcookiejar.h>
 #include <qsavefile.h>
 #include <qurlquery.h>
@@ -65,6 +66,10 @@ constexpr qreal k_indexFudge = 0.1;
     return haystack.contains(needle, Qt::CaseInsensitive);
 }
 
+[[nodiscard]] bool isHttpNotFound(const QNetworkReply* reply) {
+    return reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() == 404;
+}
+
 } // namespace
 
 Lyrics::Lyrics(QObject* parent)
@@ -121,30 +126,38 @@ LyricCandidate Lyrics::selectedCandidate() const {
 }
 
 void Lyrics::setSelectedCandidate(const LyricCandidate& value) {
-    if (m_selected == value) {
-        return;
-    }
+    const bool selectionChanged = m_selected != value || m_selected.title() != value.title() ||
+                                  m_selected.artist() != value.artist() || m_selected.album() != value.album() ||
+                                  !qFuzzyCompare(m_selected.duration() + 1.0, value.duration() + 1.0);
     m_selected = value;
-    emit selectedCandidateChanged();
+    if (selectionChanged) {
+        emit selectedCandidateChanged();
+    }
 
     if (!value.isValid()) {
         return;
     }
 
+    m_loadDebounce->stop();
+
     const auto b = value.backend();
     setBackend(b);
     setLoading(true);
 
-    cancelInFlight();
     const int reqId = newRequestId();
+    cancelInFlight();
+    startLookupJob();
 
     if (b == LyricsBackend::LRCLIB || b == LyricsBackend::NetEase) {
         const QString cached = readCachedLrc(b, value.id());
         if (!cached.isEmpty()) {
             const auto lines = parseLrc(cached);
             if (!lines.isEmpty()) {
+                beginLookupAttempt(b, true);
+                completeLookupAttempt(b, Success, {}, true);
                 setLines(lines, b);
                 setLoading(false);
+                finishLookupJob(Success);
                 if (!m_settingFromPrefs) {
                     persistTrackPrefs();
                 }
@@ -154,20 +167,37 @@ void Lyrics::setSelectedCandidate(const LyricCandidate& value) {
     }
 
     if (b == LyricsBackend::LRCLIB) {
+        beginLookupAttempt(b);
         fetchLrclibById(value.id(), reqId);
     } else if (b == LyricsBackend::NetEase) {
+        beginLookupAttempt(b);
         fetchNetEaseLyricsById(value.id(), reqId);
     } else if (b == LyricsBackend::Local) {
         // For local, the id is the file path. Read directly.
+        beginLookupAttempt(b);
         QFile f(value.id());
         if (f.open(QIODevice::ReadOnly)) {
             const QString text = QString::fromUtf8(f.readAll());
-            setLines(parseLrc(text), LyricsBackend::Local);
+            const auto lines = parseLrc(text);
+            setLines(lines, LyricsBackend::Local);
             setLoading(false);
+            if (lines.isEmpty()) {
+                completeLookupAttempt(b, NotFound);
+                finishLookupJob(NotFound);
+            } else {
+                completeLookupAttempt(b, Success);
+                finishLookupJob(Success);
+            }
         } else {
-            qCWarning(lcLyrics) << "selectedCandidate: cannot open local file" << value.id();
+            const QString error = f.errorString();
+            qCWarning(lcLyrics) << "selectedCandidate: cannot open local file" << value.id() << error;
             setLoading(false);
+            completeLookupAttempt(b, Failed, error);
+            finishLookupJob(Failed);
         }
+    } else {
+        setLoading(false);
+        finishLookupJob(NotFound);
     }
 
     if (!m_settingFromPrefs) {
@@ -205,6 +235,41 @@ QString Lyrics::trackArtist() const {
 
 QString Lyrics::trackTitle() const {
     return m_title;
+}
+
+Lyrics::LookupState Lyrics::lookupState() const {
+    return m_lookupState;
+}
+
+QVariantList Lyrics::lookupAttempts() const {
+    if (!m_lookupAttemptsDirty) {
+        return m_lookupAttemptValues;
+    }
+    m_lookupAttemptValues.clear();
+    m_lookupAttemptValues.reserve(m_lookupAttempts.size());
+    for (const auto& attempt : m_lookupAttempts) {
+        QVariantMap map;
+        map.insert(u"source"_s, backendKey(attempt.backend));
+        map.insert(u"state"_s, static_cast<int>(attempt.state));
+        map.insert(u"startedMs"_s, attempt.startedMs);
+        map.insert(u"elapsedMs"_s, attempt.elapsedMs);
+        map.insert(u"error"_s, attempt.error);
+        map.insert(u"cached"_s, attempt.cached);
+        m_lookupAttemptValues.append(std::move(map));
+    }
+    m_lookupAttemptsDirty = false;
+    return m_lookupAttemptValues;
+}
+
+qint64 Lyrics::lookupElapsedMs() const {
+    switch (m_lookupState) {
+    case Idle:
+        return 0;
+    case Fetching:
+        return m_lookupClock.isValid() ? m_lookupClock.elapsed() : 0;
+    default:
+        return m_lookupFrozenMs;
+    }
 }
 
 int Lyrics::indexForTime(qreal time) const {
@@ -250,7 +315,10 @@ void Lyrics::setTrack(const QString& artist, const QString& title, const QString
 }
 
 void Lyrics::clearTrack() {
+    m_loadDebounce->stop();
+    newRequestId();
     cancelInFlight();
+    resetLookupDetails();
     m_artist.clear();
     m_title.clear();
     m_album.clear();
@@ -339,7 +407,77 @@ void Lyrics::clearCandidates() {
     emit lyricCandidatesChanged();
 }
 
+void Lyrics::notifyLookupDetails() {
+    m_lookupAttemptsDirty = true;
+    emit lookupDetailsChanged();
+}
+
+void Lyrics::resetLookupDetails() {
+    const bool changed = m_lookupState != Idle || !m_lookupAttempts.isEmpty();
+    m_lookupClock.invalidate();
+    m_lookupFrozenMs = 0;
+    m_lookupState = Idle;
+    m_lookupAttempts.clear();
+    if (changed) {
+        notifyLookupDetails();
+    }
+}
+
+void Lyrics::startLookupJob() {
+    m_lookupClock.start();
+    m_lookupFrozenMs = 0;
+    m_lookupState = Fetching;
+    m_lookupAttempts.clear();
+    notifyLookupDetails();
+}
+
+void Lyrics::beginLookupAttempt(LyricsBackend backend, bool cached) {
+    if (m_lookupState != Fetching) {
+        startLookupJob();
+    }
+    LookupAttempt attempt;
+    attempt.backend = backend;
+    attempt.startedMs = m_lookupClock.isValid() ? m_lookupClock.elapsed() : 0;
+    attempt.cached = cached;
+    m_lookupAttempts.append(std::move(attempt));
+    notifyLookupDetails();
+}
+
+void Lyrics::completeLookupAttempt(LyricsBackend backend, LookupState state, const QString& error, bool cached) {
+    for (auto it = m_lookupAttempts.end(); it != m_lookupAttempts.begin();) {
+        --it;
+        if (it->backend != backend || it->state != Fetching) {
+            continue;
+        }
+        it->state = state;
+        it->elapsedMs = m_lookupClock.isValid() ? qMax<qint64>(0, m_lookupClock.elapsed() - it->startedMs) : 0;
+        it->error = error;
+        it->cached = cached;
+        notifyLookupDetails();
+        return;
+    }
+}
+
+void Lyrics::finishLookupJob(LookupState state) {
+    if (m_lookupState != Fetching) {
+        return;
+    }
+    m_lookupFrozenMs = m_lookupClock.isValid() ? m_lookupClock.elapsed() : 0;
+    m_lookupClock.invalidate();
+    m_lookupState = state;
+    notifyLookupDetails();
+}
+
+bool Lyrics::lookupHasFailure() const {
+    return std::ranges::any_of(m_lookupAttempts, [](const LookupAttempt& attempt) {
+        return attempt.state == Failed;
+    });
+}
+
 void Lyrics::scheduleLoad() {
+    newRequestId();
+    cancelInFlight();
+    resetLookupDetails();
     m_loadDebounce->start();
 }
 
@@ -369,14 +507,17 @@ void Lyrics::trackReply(int reqId, QNetworkReply* reply) {
 
 void Lyrics::doLoad() {
     if (m_artist.isEmpty() && m_title.isEmpty()) {
+        newRequestId();
+        cancelInFlight();
+        resetLookupDetails();
         clearLines();
         clearCandidates();
         setLoading(false);
         return;
     }
 
-    cancelInFlight();
     const int reqId = newRequestId();
+    cancelInFlight();
 
     setLoading(true);
     clearLines();
@@ -406,6 +547,8 @@ void Lyrics::doLoad() {
         return;
     }
 
+    startLookupJob();
+
     // Primary attempt by preferred backend
     switch (m_preferredBackend) {
     case LyricsBackend::Local:
@@ -425,9 +568,13 @@ void Lyrics::doLoad() {
 }
 
 void Lyrics::chainNext(LyricsBackend justFailed, int reqId) {
+    if (reqId != m_currentRequestId) {
+        return;
+    }
     if (m_preferredBackend != LyricsBackend::Auto) {
         // Non-auto modes don't chain
         setLoading(false);
+        finishLookupJob(lookupHasFailure() ? Failed : NotFound);
         return;
     }
     switch (justFailed) {
@@ -440,6 +587,7 @@ void Lyrics::chainNext(LyricsBackend justFailed, int reqId) {
     case LyricsBackend::NetEase:
     default:
         setLoading(false);
+        finishLookupJob(lookupHasFailure() ? Failed : NotFound);
         return;
     }
 }
@@ -450,56 +598,52 @@ void Lyrics::tryLocal(int reqId) {
     }
 
     setBackend(LyricsBackend::Local);
+    beginLookupAttempt(LyricsBackend::Local);
 
     const QString dir = lyricsDir();
     if (dir.isEmpty()) {
+        completeLookupAttempt(LyricsBackend::Local, NotFound);
         chainNext(LyricsBackend::Local, reqId);
         return;
     }
 
-    const QString direct = tryReadLocalLrc(dir, m_artist, m_title);
-    if (!direct.isEmpty()) {
-        QFile f(direct);
-        if (f.open(QIODevice::ReadOnly)) {
-            const QString text = QString::fromUtf8(f.readAll());
-            const auto lines = parseLrc(text);
-            if (!lines.isEmpty()) {
-                setLines(lines, LyricsBackend::Local);
-                appendCandidates(
-                    { LyricCandidate(LyricsBackend::Local, direct, m_title, m_artist, m_album, m_duration) });
-                m_selected = LyricCandidate(LyricsBackend::Local, direct, m_title, m_artist, m_album, m_duration);
-                emit selectedCandidateChanged();
-                if (!m_settingFromPrefs) {
-                    persistTrackPrefs();
-                }
-                setLoading(false);
-                return;
-            }
+    QString openError;
+    const auto tryFile = [&](const QString& path) {
+        if (path.isEmpty()) {
+            return false;
         }
-    }
+        QFile f(path);
+        if (!f.open(QIODevice::ReadOnly)) {
+            openError = f.errorString();
+            return false;
+        }
+        const QString text = QString::fromUtf8(f.readAll());
+        const auto lines = parseLrc(text);
+        if (lines.isEmpty()) {
+            return false;
+        }
+        setLines(lines, LyricsBackend::Local);
+        appendCandidates({ LyricCandidate(LyricsBackend::Local, path, m_title, m_artist, m_album, m_duration) });
+        m_selected = LyricCandidate(LyricsBackend::Local, path, m_title, m_artist, m_album, m_duration);
+        emit selectedCandidateChanged();
+        if (!m_settingFromPrefs) {
+            persistTrackPrefs();
+        }
+        setLoading(false);
+        completeLookupAttempt(LyricsBackend::Local, Success);
+        finishLookupJob(Success);
+        return true;
+    };
 
-    const QString recursive = findLocalLrcRecursive(dir, m_artist, m_title);
-    if (!recursive.isEmpty()) {
-        QFile f(recursive);
-        if (f.open(QIODevice::ReadOnly)) {
-            const QString text = QString::fromUtf8(f.readAll());
-            const auto lines = parseLrc(text);
-            if (!lines.isEmpty()) {
-                setLines(lines, LyricsBackend::Local);
-                appendCandidates(
-                    { LyricCandidate(LyricsBackend::Local, recursive, m_title, m_artist, m_album, m_duration) });
-                m_selected = LyricCandidate(LyricsBackend::Local, recursive, m_title, m_artist, m_album, m_duration);
-                emit selectedCandidateChanged();
-                if (!m_settingFromPrefs) {
-                    persistTrackPrefs();
-                }
-                setLoading(false);
-                return;
-            }
-        }
+    if (tryFile(tryReadLocalLrc(dir, m_artist, m_title))) {
+        return;
+    }
+    if (tryFile(findLocalLrcRecursive(dir, m_artist, m_title))) {
+        return;
     }
 
     qCDebug(lcLyrics) << "no local lrc for" << m_artist << "-" << m_title;
+    completeLookupAttempt(LyricsBackend::Local, openError.isEmpty() ? NotFound : Failed, openError);
     chainNext(LyricsBackend::Local, reqId);
 }
 
@@ -509,6 +653,7 @@ void Lyrics::tryLrclib(int reqId) {
     }
 
     setBackend(LyricsBackend::LRCLIB);
+    beginLookupAttempt(LyricsBackend::LRCLIB);
 
     QUrl url(u"https://lrclib.net/api/get"_s);
     QUrlQuery q;
@@ -534,22 +679,36 @@ void Lyrics::tryLrclib(int reqId) {
         }
         if (reply->error() != QNetworkReply::NoError) {
             qCDebug(lcLyrics) << "lrclib /get error:" << reply->errorString();
+            if (isHttpNotFound(reply)) {
+                completeLookupAttempt(LyricsBackend::LRCLIB, NotFound);
+            } else {
+                completeLookupAttempt(LyricsBackend::LRCLIB, Failed, reply->errorString());
+            }
             chainNext(LyricsBackend::LRCLIB, reqId);
             return;
         }
-        const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
+        QJsonParseError parseError{};
+        const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll(), &parseError);
+        if (parseError.error != QJsonParseError::NoError) {
+            qCDebug(lcLyrics) << "lrclib /get JSON error:" << parseError.errorString();
+            completeLookupAttempt(LyricsBackend::LRCLIB, Failed, parseError.errorString());
+            chainNext(LyricsBackend::LRCLIB, reqId);
+            return;
+        }
         const QJsonObject obj = doc.object();
         const QString synced = obj.value(u"syncedLyrics"_s).toString();
         const qint64 id = static_cast<qint64>(obj.value(u"id"_s).toDouble());
 
         if (synced.isEmpty()) {
             qCDebug(lcLyrics) << "lrclib: no syncedLyrics for" << m_artist << "-" << m_title;
+            completeLookupAttempt(LyricsBackend::LRCLIB, NotFound);
             chainNext(LyricsBackend::LRCLIB, reqId);
             return;
         }
 
         const auto lines = parseLrc(synced);
         if (lines.isEmpty()) {
+            completeLookupAttempt(LyricsBackend::LRCLIB, NotFound);
             chainNext(LyricsBackend::LRCLIB, reqId);
             return;
         }
@@ -566,6 +725,8 @@ void Lyrics::tryLrclib(int reqId) {
             persistTrackPrefs();
         }
         setLoading(false);
+        completeLookupAttempt(LyricsBackend::LRCLIB, Success);
+        finishLookupJob(Success);
     });
 }
 
@@ -575,6 +736,7 @@ void Lyrics::tryNetEase(int reqId) {
     }
 
     setBackend(LyricsBackend::NetEase);
+    beginLookupAttempt(LyricsBackend::NetEase);
 
     // Reset cookies (LyricsBackend::NetEase rejects requests with stale cookies sometimes)
     m_nam->setCookieJar(new QNetworkCookieJar(m_nam));
@@ -596,11 +758,19 @@ void Lyrics::tryNetEase(int reqId) {
         }
         if (reply->error() != QNetworkReply::NoError) {
             qCDebug(lcLyrics) << "netease /search error:" << reply->errorString();
+            completeLookupAttempt(LyricsBackend::NetEase, Failed, reply->errorString());
             chainNext(LyricsBackend::NetEase, reqId);
             return;
         }
 
-        const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
+        QJsonParseError parseError{};
+        const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll(), &parseError);
+        if (parseError.error != QJsonParseError::NoError) {
+            qCDebug(lcLyrics) << "netease /search JSON error:" << parseError.errorString();
+            completeLookupAttempt(LyricsBackend::NetEase, Failed, parseError.errorString());
+            chainNext(LyricsBackend::NetEase, reqId);
+            return;
+        }
         const QJsonArray songs = doc.object().value(u"result"_s).toObject().value(u"songs"_s).toArray();
 
         // Find best match by artist substring
@@ -620,6 +790,7 @@ void Lyrics::tryNetEase(int reqId) {
 
         if (bestId < 0) {
             qCDebug(lcLyrics) << "netease: no artist match for" << m_artist << "-" << m_title;
+            completeLookupAttempt(LyricsBackend::NetEase, NotFound);
             chainNext(LyricsBackend::NetEase, reqId);
             return;
         }
@@ -722,18 +893,43 @@ void Lyrics::fetchLrclibById(const QString& id, int reqId) {
         if (reply->error() != QNetworkReply::NoError) {
             qCWarning(lcLyrics) << "lrclib /get/{id} error:" << reply->errorString();
             setLoading(false);
+            if (isHttpNotFound(reply)) {
+                completeLookupAttempt(LyricsBackend::LRCLIB, NotFound);
+                finishLookupJob(lookupHasFailure() ? Failed : NotFound);
+            } else {
+                completeLookupAttempt(LyricsBackend::LRCLIB, Failed, reply->errorString());
+                finishLookupJob(Failed);
+            }
             return;
         }
-        const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
+        QJsonParseError parseError{};
+        const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll(), &parseError);
+        if (parseError.error != QJsonParseError::NoError) {
+            qCWarning(lcLyrics) << "lrclib /get/{id} JSON error:" << parseError.errorString();
+            setLoading(false);
+            completeLookupAttempt(LyricsBackend::LRCLIB, Failed, parseError.errorString());
+            finishLookupJob(Failed);
+            return;
+        }
         const QString synced = doc.object().value(u"syncedLyrics"_s).toString();
         if (synced.isEmpty()) {
             qCDebug(lcLyrics) << "lrclib /get/{id}: no syncedLyrics";
             setLoading(false);
+            completeLookupAttempt(LyricsBackend::LRCLIB, NotFound);
+            finishLookupJob(lookupHasFailure() ? Failed : NotFound);
+            return;
+        }
+        const auto lines = parseLrc(synced);
+        setLines(lines, LyricsBackend::LRCLIB);
+        setLoading(false);
+        if (lines.isEmpty()) {
+            completeLookupAttempt(LyricsBackend::LRCLIB, NotFound);
+            finishLookupJob(lookupHasFailure() ? Failed : NotFound);
             return;
         }
         writeCachedLrc(LyricsBackend::LRCLIB, id, synced);
-        setLines(parseLrc(synced), LyricsBackend::LRCLIB);
-        setLoading(false);
+        completeLookupAttempt(LyricsBackend::LRCLIB, Success);
+        finishLookupJob(Success);
     });
 }
 
@@ -757,18 +953,38 @@ void Lyrics::fetchNetEaseLyricsById(const QString& id, int reqId) {
         if (reply->error() != QNetworkReply::NoError) {
             qCWarning(lcLyrics) << "netease /lyric error:" << reply->errorString();
             setLoading(false);
+            completeLookupAttempt(LyricsBackend::NetEase, Failed, reply->errorString());
+            finishLookupJob(Failed);
             return;
         }
-        const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
+        QJsonParseError parseError{};
+        const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll(), &parseError);
+        if (parseError.error != QJsonParseError::NoError) {
+            qCWarning(lcLyrics) << "netease /lyric JSON error:" << parseError.errorString();
+            setLoading(false);
+            completeLookupAttempt(LyricsBackend::NetEase, Failed, parseError.errorString());
+            finishLookupJob(Failed);
+            return;
+        }
         const QString lrc = doc.object().value(u"lrc"_s).toObject().value(u"lyric"_s).toString();
         if (lrc.isEmpty()) {
             qCDebug(lcLyrics) << "netease /lyric: empty for id" << id;
             setLoading(false);
+            completeLookupAttempt(LyricsBackend::NetEase, NotFound);
+            finishLookupJob(lookupHasFailure() ? Failed : NotFound);
+            return;
+        }
+        const auto lines = parseLrc(lrc);
+        setLines(lines, LyricsBackend::NetEase);
+        setLoading(false);
+        if (lines.isEmpty()) {
+            completeLookupAttempt(LyricsBackend::NetEase, NotFound);
+            finishLookupJob(lookupHasFailure() ? Failed : NotFound);
             return;
         }
         writeCachedLrc(LyricsBackend::NetEase, id, lrc);
-        setLines(parseLrc(lrc), LyricsBackend::NetEase);
-        setLoading(false);
+        completeLookupAttempt(LyricsBackend::NetEase, Success);
+        finishLookupJob(Success);
     });
 }
 
