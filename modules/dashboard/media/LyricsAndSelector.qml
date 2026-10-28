@@ -37,7 +37,9 @@ Item {
                 font: Tokens.font.title.medium
             }
 
-            LyricsInfo {}
+            LyricsInfo {
+                pageActive: root.pageActive
+            }
         }
 
         LyricList {
