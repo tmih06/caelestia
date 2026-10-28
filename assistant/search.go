@@ -59,13 +59,14 @@ var (
 		sync.Mutex
 		entries map[string]cachedSearch
 	}{entries: make(map[string]cachedSearch)}
-	tagPattern        = regexp.MustCompile(`<[^>]+>`)
-	mdLinkPattern     = regexp.MustCompile(`\[([^\]]*)\]\([^)]+\)`)
-	mdLinkTailPattern = regexp.MustCompile(`\]\([^)]+\)`)
-	mdImagePattern    = regexp.MustCompile(`!\[[^\]]*\]\([^)]+\)`)
-	mdHeadingPattern  = regexp.MustCompile(`(?m)^#{1,6}\s*`)
-	sentencePattern   = regexp.MustCompile(`[.!?]\s+`)
-	spacePattern      = regexp.MustCompile(`\s+`)
+	tagPattern         = regexp.MustCompile(`<[^>]+>`)
+	mdLinkPattern      = regexp.MustCompile(`\[([^\]]*)\]\([^)]+\)`)
+	mdLinkTailPattern  = regexp.MustCompile(`\]\([^)]+\)`)
+	mdImagePattern     = regexp.MustCompile(`!\[[^\]]*\]\([^)]+\)`)
+	mdHeadingPattern   = regexp.MustCompile(`(?m)^#{1,6}\s*`)
+	sentencePattern    = regexp.MustCompile(`[.!?]\s+`)
+	boilerplatePattern = regexp.MustCompile(`(?i)citation|copy citation|manual of style|fact-checked|last updated|select citation`)
+	spacePattern       = regexp.MustCompile(`\s+`)
 )
 
 func webSearchTool() extension.ToolDefinition {
@@ -674,10 +675,13 @@ func bestSnippet(text, query string, max int) string {
 			}
 		}
 		if strings.Contains(lower, " is ") || strings.Contains(lower, " are ") || strings.Contains(lower, " was ") {
-			score++
+			score += 2
 		}
-		if strings.HasSuffix(sentence, "?") {
-			score--
+		if strings.HasSuffix(strings.TrimSpace(sentence), "?") {
+			score -= 5
+		}
+		if boilerplatePattern.MatchString(sentence) {
+			score -= 3
 		}
 		if score > bestScore {
 			best, bestScore = sentence, score
