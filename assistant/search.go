@@ -68,6 +68,7 @@ var (
 	boilerplatePattern = regexp.MustCompile(`(?i)citation|copy citation|manual of style|fact-checked|last updated|select citation`)
 	leadingDatePattern = regexp.MustCompile(`^\s*(?:\d{1,4}[,/]\s*)*(?:\d{4}\s*)?`)
 	spacePattern       = regexp.MustCompile(`\s+`)
+	spaceBeforePunct   = regexp.MustCompile(`\s+([.,;:!?])`)
 )
 
 func webSearchTool() extension.ToolDefinition {
@@ -649,6 +650,7 @@ func cleanSnippet(value string) string {
 	value = strings.ReplaceAll(value, "**", "")
 	value = strings.ReplaceAll(value, "`", "")
 	value = spacePattern.ReplaceAllString(value, " ")
+	value = spaceBeforePunct.ReplaceAllString(value, "$1")
 	return strings.TrimSpace(value)
 }
 
